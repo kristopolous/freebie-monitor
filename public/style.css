@@ -195,6 +195,8 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
 .btn--secondary:hover { background: var(--surface); transform: translateY(-1px); }
 .btn--ghost { background: transparent; color: var(--text-soft); border-color: var(--surface-line); }
 .btn--ghost:hover { color: var(--text); border-color: var(--text-faint); }
+.btn--danger { background: transparent; color: var(--hot); border-color: color-mix(in srgb, var(--hot) 40%, transparent); }
+.btn--danger:hover { background: color-mix(in srgb, var(--hot) 14%, transparent); border-color: var(--hot); }
 .btn:active { transform: translateY(0); }
 
 /* ---- pipeline ---- */
@@ -370,6 +372,8 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
 }
 .docket-row__status--tracking { color: var(--hot); }
 .docket-row__status--fulfilled { color: var(--money); }
+.docket-row__status--cancelled,
+.docket-row__status--missed { color: var(--text-faint); }
 
 .docket-empty { color: var(--text-faint); font-size: 13px; padding: 24px 0; }
 
@@ -485,6 +489,8 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
 }
 .ticket.is-complete .ticket__dot { background: var(--money); border-color: var(--money); }
 .ticket.is-overdue .ticket__dot { background: var(--hot); border-color: var(--hot); }
+.ticket.is-locked { opacity: 0.5; }
+.ticket.is-locked .ticket__dot { background: var(--surface); border-color: var(--text-faint); }
 
 .ticket__date {
   font-family: var(--font-mono);

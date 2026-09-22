@@ -337,13 +337,15 @@ async function fetchDocket() {
   renderDocket(commitments);
 }
 
-function renderTicket(ticket, index, daysLeft, complete, overdue) {
+function renderTicket(ticket, index, daysLeft, complete, overdue, locked) {
   const dateLabel = new Date(ticket.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  const dateSub = complete ? 'done' : overdue ? `${dateLabel} · overdue` : `${dateLabel} · ${daysLeft}d left`;
+  const dateSub = locked ? 'backed out' : complete ? 'done' : overdue ? `${dateLabel} · overdue` : `${dateLabel} · ${daysLeft}d left`;
 
   let body;
   if (ticket.kind === 'action') {
-    body = `
+    body = locked
+      ? `<span class="ticket-done">${escapeHtml(ticket.title)}</span>`
+      : `
       <label class="ticket__check">
         <input type="checkbox" data-toggle="${index}" ${ticket.done ? 'checked' : ''} />
         <span class="${ticket.done ? 'ticket-done' : ''}">${escapeHtml(ticket.title)}</span>
@@ -362,7 +364,7 @@ function renderTicket(ticket, index, daysLeft, complete, overdue) {
           ${unit}${current.toLocaleString()} / ${unit}${target.toLocaleString()}${complete ? '' : ` — ${unit}${remaining.toLocaleString()} more`}
         </div>
         ${
-          complete
+          complete || locked
             ? ''
             : `<form class="ticket__report" data-report="${index}">
                  <input type="number" min="0" step="1" placeholder="e.g. ${current || 400}" />
@@ -375,7 +377,7 @@ function renderTicket(ticket, index, daysLeft, complete, overdue) {
   }
 
   return `
-    <li class="ticket ticket--${ticket.kind} ${complete ? 'is-complete' : ''} ${overdue ? 'is-overdue' : ''}">
+    <li class="ticket ticket--${ticket.kind} ${complete ? 'is-complete' : ''} ${overdue ? 'is-overdue' : ''} ${locked ? 'is-locked' : ''}">
       <span class="ticket__dot"></span>
       <div class="ticket__body">
         <div class="ticket__date">${dateSub}</div>
@@ -399,6 +401,7 @@ function renderDocket(commitments) {
       const actionable = c.plan.tickets.filter((t) => t.kind !== 'deadline');
       const doneCount = actionable.filter(isTicketComplete).length;
 
+      const locked = c.status === 'cancelled';
       const withIndex = c.plan.tickets.map((t, i) => ({ t, i }));
       withIndex.sort((a, b) => new Date(a.t.deadline) - new Date(b.t.deadline));
       const ticketsHtml = withIndex
@@ -406,7 +409,7 @@ function renderDocket(commitments) {
           const complete = isTicketComplete(t);
           const daysLeft = Math.round((new Date(t.deadline).getTime() - now) / 86400000);
           const overdue = !complete && daysLeft < 0 && t.kind !== 'deadline';
-          return renderTicket(t, i, daysLeft, complete, overdue);
+          return renderTicket(t, i, daysLeft, complete, overdue, locked);
         })
         .join('');
 
@@ -420,7 +423,7 @@ function renderDocket(commitments) {
           <div class="docket-row__value">$${c.personalValueUsd.toLocaleString()}</div>
           <div class="docket-row__deadline">${deadlineText}</div>
           <div class="docket-row__status docket-row__status--${c.status}">${STATUS_LABEL[c.status] ?? c.status}</div>
-          ${c.status === 'tracking' ? `<button type="button" class="btn btn--ghost btn--small" data-cancel>Back out</button>` : ''}
+          ${c.status === 'tracking' ? `<button type="button" class="btn btn--danger btn--small" data-cancel>Back out</button>` : ''}
         </div>
         ${c.nag ? `<p class="docket-nag">⚠ ${escapeHtml(c.nag)}</p>` : ''}
         <ul class="ticket-timeline">${ticketsHtml}</ul>
