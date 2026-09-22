@@ -535,6 +535,9 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
 
 @media (max-width: 560px) {
   .docket-row { grid-template-columns: 1fr; gap: 4px; }
+  .docket-row__status,
+  .docket-row .btn--danger,
+  .docket-row .btn--ghost { justify-self: end; }
 }
 
 /* ---- dialog / claim detail ---- */

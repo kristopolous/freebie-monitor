@@ -89,12 +89,23 @@ app.patch('/api/profile/:id', async (c) => {
   const parsed = OnboardingSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: z.treeifyError(parsed.error) }, 400);
 
+  const before = await getProfile(c.req.param('id'));
+  if (!before) return c.json({ error: 'unknown profile' }, 404);
+
+  // Opening Settings and hitting Save with nothing actually changed must not
+  // burn a real, paid Cognee write + Bright Data/LLM re-scan - both are
+  // real API costs, not free lookups, and matching only needs to re-run
+  // when the answers it depends on actually changed.
+  const changed = JSON.stringify(before.answers) !== JSON.stringify(parsed.data);
+
   const profile = await updateProfile(c.req.param('id'), parsed.data);
   if (!profile) return c.json({ error: 'unknown profile' }, 404);
-  await mirrorAnswersToCognee(profile.id, parsed.data);
-  await invalidateDeals(profile.id); // matching depends on the answers that just changed
+  if (changed) {
+    await mirrorAnswersToCognee(profile.id, parsed.data);
+    await invalidateDeals(profile.id);
+  }
 
-  return c.json({ profile });
+  return c.json({ profile, changed });
 });
 
 // Builds and caches the Strategist plan for every deal a scan just returned, so clicking
