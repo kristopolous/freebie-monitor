@@ -1,3 +1,5 @@
+![Freebie Monitor — never miss a bonus again](freebie.jpg)
+
 # Freebie Monitor
 
 Built for **Battle of the Personal Brains** (Cognee + AWS Strands Agents + Docker Sandboxes +
