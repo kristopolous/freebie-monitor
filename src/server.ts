@@ -20,7 +20,7 @@ import { getProfile, listCommitments, saveCommitment, saveProfile, updateProfile
 import { computeNag } from './nag.js';
 import { getCachedDeals, setCachedDeals, invalidateDeals } from './dealsCache.js';
 import { getCachedPlan, setCachedPlan } from './plansCache.js';
-import type { PersonalizedDeal } from './types.js';
+import type { Commitment, PersonalizedDeal } from './types.js';
 
 const app = new Hono();
 
@@ -150,6 +150,31 @@ app.get('/api/commitments', async (c) => {
   return c.json({ commitments: withNags });
 });
 
+// Cognee only ever heard about onboarding answers and the moment tracking started — every
+// checked-off ticket and reported dollar figure since was invisible to the person's memory
+// graph. Mirroring these in means later reasoning (in this session or a future one) can draw
+// on the person's actual follow-through, not just their day-one snapshot — including a
+// genuinely useful signal for eligibility: a past COMPLETED fact for an issuer is exactly what
+// a once-per-X-months rule needs to check against.
+async function mirrorTicketEventToCognee(profileId: string, commitment: Commitment, ticketIndex: number) {
+  const ticket = commitment.plan.tickets[ticketIndex];
+  if (!ticket) return;
+  const cognee = getCogneeClient();
+  const facts = [
+    `PROGRESS: on "${commitment.dealTitle}" (${commitment.institution}), ticket "${ticket.title}" ` +
+      (ticket.kind === 'target'
+        ? `now at $${(ticket.currentAmount ?? 0).toLocaleString()} of $${(ticket.targetAmount ?? 0).toLocaleString()}.`
+        : `marked ${ticket.done ? 'done' : 'not done'}.`),
+  ];
+  if (commitment.status === 'fulfilled') {
+    facts.push(
+      `COMPLETED: this person successfully earned "${commitment.dealTitle}" (${commitment.institution}), ` +
+        `worth $${commitment.personalValueUsd.toLocaleString()}. Relevant for future eligibility checks on this institution.`,
+    );
+  }
+  await cognee.addFacts(profileId, facts);
+}
+
 const ToggleTicketSchema = z.object({ done: z.boolean() });
 
 // The person checks an 'action' ticket off once they've actually done it —
@@ -165,6 +190,7 @@ app.post('/api/commitments/:id/tickets/:index/toggle', async (c) => {
 
   const commitment = await toggleTicket(id, ticketIndex, parsed.data.done);
   if (!commitment) return c.json({ error: 'unknown commitment or ticket' }, 404);
+  await mirrorTicketEventToCognee(commitment.profileId, commitment, ticketIndex);
 
   return c.json({ commitment: { ...commitment, nag: computeNag(commitment) } });
 });
@@ -184,6 +210,7 @@ app.post('/api/commitments/:id/tickets/:index/report', async (c) => {
 
   const commitment = await reportTicketProgress(id, ticketIndex, parsed.data.currentAmount);
   if (!commitment) return c.json({ error: 'unknown commitment or ticket' }, 404);
+  await mirrorTicketEventToCognee(commitment.profileId, commitment, ticketIndex);
 
   return c.json({ commitment: { ...commitment, nag: computeNag(commitment) } });
 });
