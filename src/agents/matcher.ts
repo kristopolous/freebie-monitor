@@ -28,7 +28,15 @@ interface ScoredDeal {
 }
 
 function heuristicScore(deal: DealCandidate, answers: OnboardingAnswers): ScoredDeal | null {
-  if (!answers.openToNewAccounts) return null; // every deal here requires opening a new account
+  // Every deal here requires opening a new account — but an empty Drops screen is worse than a
+  // low-scoring one, so still show it with its real value and honest reasoning, never hide it.
+  if (!answers.openToNewAccounts) {
+    return {
+      relevanceScore: 5,
+      personalValueUsd: parseUsdEstimate(deal),
+      reasoning: "You said you're not open to new accounts — this needs one, so it's a low priority, but here's what it's worth if you change your mind.",
+    };
+  }
 
   let score = 40;
   const reasons: string[] = [];
@@ -115,13 +123,10 @@ const MatchSchema = z.object({
  * worth to *this* person, not a generic audience.
  */
 export async function runMatcher(profile: Profile, candidates: DealCandidate[]): Promise<PersonalizedDeal[]> {
-  // Hard, deterministic gate — every deal here requires opening a new
-  // account, so this is known client-side and must never depend on the
-  // model consistently applying it. (Previously only the heuristic path
-  // enforced this; the LLM path would "honor" it by scoring to $0 instead
-  // of omitting the deal, which read as a bug — a $300 bonus showing $0.)
-  if (!profile.answers.openToNewAccounts) return [];
-
+  // Preferences REDUCE/reorder the full candidate list — they never gate it to empty. An empty
+  // Drops screen is a dead end; a low-relevance deal with honest reasoning is always better than
+  // nothing. (This used to hard-return [] when openToNewAccounts was false — every deal here
+  // needs one — but that's a filter's job to express via a low score, not to erase the list.)
   const cognee = getCogneeClient();
   const facts = await cognee.allFacts(profile.id);
 
