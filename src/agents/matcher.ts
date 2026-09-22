@@ -79,7 +79,7 @@ function checkDisqualification(deal: DealCandidate, answers: OnboardingAnswers):
     };
   }
 
-  if (/deposit|balance|combined|new-to-|new funds/i.test(deal.requirement)) {
+  if (/deposit|balance|combined|new-to-|new funds|transfer|assets/i.test(deal.requirement)) {
     const ceiling = IDLE_CASH_CEILING[answers.idleCashBracket];
     if (required <= ceiling) return { disqualified: false };
     const bracketLabel =
