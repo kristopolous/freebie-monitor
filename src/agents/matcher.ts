@@ -178,7 +178,11 @@ export async function runMatcher(profile: Profile, candidates: DealCandidate[]):
           .map((d) => {
             const m = byId.get(d.id);
             if (!m) return null;
-            return { ...d, relevanceScore: m.relevanceScore, personalValueUsd: m.personalValueUsd, reasoning: m.reasoning };
+            // The dollar value is already sitting in d.headlineValue, known and
+            // cached — parse it deterministically rather than trusting the
+            // model to re-transcribe a number, which it can (and did) botch
+            // even while its own reasoning cited the correct figure.
+            return { ...d, relevanceScore: m.relevanceScore, personalValueUsd: parseUsdEstimate(d), reasoning: m.reasoning };
           })
           .filter((d): d is PersonalizedDeal => d !== null)
           .sort((a, b) => b.relevanceScore - a.relevanceScore);
