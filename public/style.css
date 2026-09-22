@@ -92,7 +92,7 @@ button { font-family: inherit; }
 }
 
 .masthead__title { display: flex; align-items: baseline; gap: 10px; }
-.masthead__mark { font-size: 24px; color: var(--gold); }
+.masthead__mark { display: block; border-radius: 7px; }
 .masthead__title h1 { font-size: 22px; letter-spacing: -0.01em; }
 
 .masthead__meta {
