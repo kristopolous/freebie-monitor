@@ -12,6 +12,7 @@ const views = {
   pipeline: document.getElementById('view-pipeline'),
   deals: document.getElementById('view-deals'),
   brain: document.getElementById('view-brain'),
+  calendar: document.getElementById('view-calendar'),
 };
 
 function showView(name) {
@@ -101,7 +102,7 @@ function tierFor(relevanceScore) {
 
 async function loadStatus() {
   try {
-    const res = await fetch('/api/status');
+    const res = await fetch('api/status');
     const s = await res.json();
     document.getElementById('statusbar').innerHTML = [
       ['Cognee', s.cognee],
@@ -119,7 +120,7 @@ async function loadStatus() {
 async function refreshScoreTotal() {
   if (!state.profileId) return;
   try {
-    const res = await fetch(`/api/commitments?profileId=${state.profileId}`);
+    const res = await fetch(`api/commitments?profileId=${state.profileId}`);
     const { commitments } = await res.json();
     // Only what's actually been earned (every ticket complete) counts —
     // "tracking" is intent, not money in hand yet.
@@ -144,7 +145,7 @@ document.getElementById('onboardForm').addEventListener('submit', async (e) => {
   animatePipeline(['scout', 'matcher']);
   document.getElementById('pipelineStatus').textContent = 'Booting up your monitor…';
 
-  const res = await fetch('/api/onboard', {
+  const res = await fetch('api/onboard', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(state.answers),
@@ -162,7 +163,7 @@ document.getElementById('onboardForm').addEventListener('submit', async (e) => {
 
 document.getElementById('settingsForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const res = await fetch(`/api/profile/${state.profileId}`, {
+  const res = await fetch(`api/profile/${state.profileId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(state.answers),
@@ -204,7 +205,7 @@ function animatePipeline(order) {
 
 async function fetchDeals(force = false) {
   document.getElementById('pipelineStatus').textContent = 'Scanning for free money…';
-  const res = await fetch(`/api/deals?profileId=${state.profileId}${force ? '&force=true' : ''}`);
+  const res = await fetch(`api/deals?profileId=${state.profileId}${force ? '&force=true' : ''}`);
   const { deals } = await res.json();
   state.deals = deals;
   renderDeals();
@@ -265,7 +266,7 @@ async function trackDeal(dealId) {
   document.getElementById('pipelineStatus').textContent = `Building your tickets for ${deal.title}…`;
   animatePipeline(['strategist', 'actor']);
 
-  const res = await fetch('/api/deals/track', {
+  const res = await fetch('api/deals/track', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profileId: state.profileId, deal }),
@@ -325,7 +326,7 @@ function isTicketComplete(t) {
 }
 
 async function fetchDocket() {
-  const res = await fetch(`/api/commitments?profileId=${state.profileId}`);
+  const res = await fetch(`api/commitments?profileId=${state.profileId}`);
   const { commitments } = await res.json();
   renderDocket(commitments);
 }
@@ -442,7 +443,7 @@ function renderDocket(commitments) {
 }
 
 async function toggleTicket(commitmentId, ticketIndex, done) {
-  const res = await fetch(`/api/commitments/${commitmentId}/tickets/${ticketIndex}/toggle`, {
+  const res = await fetch(`api/commitments/${commitmentId}/tickets/${ticketIndex}/toggle`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ done }),
@@ -454,7 +455,7 @@ async function toggleTicket(commitmentId, ticketIndex, done) {
 }
 
 async function reportProgress(commitmentId, ticketIndex, currentAmount) {
-  const res = await fetch(`/api/commitments/${commitmentId}/tickets/${ticketIndex}/report`, {
+  const res = await fetch(`api/commitments/${commitmentId}/tickets/${ticketIndex}/report`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ currentAmount }),
@@ -502,7 +503,7 @@ async function init() {
   const savedId = localStorage.getItem(STORAGE_KEY);
   if (savedId) {
     try {
-      const res = await fetch(`/api/profile/${savedId}`);
+      const res = await fetch(`api/profile/${savedId}`);
       if (res.ok) {
         const { profile } = await res.json();
         state.profileId = profile.id;

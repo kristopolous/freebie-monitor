@@ -7,19 +7,20 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css" />
-  <link rel="icon" type="image/png" href="/img/logo.png" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/png" href="img/logo.png" />
 </head>
 <body>
   <header class="masthead">
     <div class="masthead__title">
-      <img class="masthead__mark" src="/img/logo.png" alt="" width="32" height="34" />
+      <img class="masthead__mark" src="img/logo.png" alt="" width="32" height="34" />
       <h1>Freebie Monitor</h1>
     </div>
     <div class="masthead__meta" id="scoreTotal">$0 scored so far</div>
     <nav class="masthead__nav" id="mainNav" hidden>
       <button data-nav="deals" class="nav-link is-active">Drops</button>
       <button data-nav="brain" class="nav-link">To-Do</button>
+      <button data-nav="calendar" class="nav-link">Calendar</button>
       <button data-nav="settings" class="nav-link">Settings</button>
     </nav>
   </header>
@@ -102,6 +103,21 @@
         <div class="docket__list" id="docketList"></div>
       </div>
     </section>
+
+    <!-- CALENDAR -->
+    <section id="view-calendar" class="view" hidden>
+      <div class="calendar">
+        <div class="calendar__header">
+          <button class="btn btn--ghost btn--small" id="calPrev" aria-label="Previous month">&larr;</button>
+          <h2 class="calendar__month-label" id="calMonthLabel"></h2>
+          <button class="btn btn--ghost btn--small" id="calNext" aria-label="Next month">&rarr;</button>
+        </div>
+        <div class="calendar__weekdays">
+          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+        </div>
+        <div class="calendar__grid" id="calGrid"></div>
+      </div>
+    </section>
   </main>
 
   <div class="score-pop-layer" id="scorePopLayer" hidden>
@@ -117,6 +133,6 @@
 
   <footer class="statusbar" id="statusbar"></footer>
 
-  <script src="/app.js" type="module"></script>
+  <script src="app.js" type="module"></script>
 </body>
 </html>
