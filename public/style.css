@@ -534,10 +534,21 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
 .ticket__deadline-label { font-size: 13px; color: var(--gold); font-weight: 600; }
 
 @media (max-width: 560px) {
-  .docket-row { grid-template-columns: 1fr; gap: 4px; }
-  .docket-row__status,
+  .docket-row {
+    grid-template-columns: 1fr auto auto;
+    row-gap: 4px;
+    column-gap: 8px;
+    align-items: start;
+  }
+  /* Title block shares the top row with the status badge and the
+     cancel/undo button, pulled right - value and deadline drop to their
+     own full-width rows below instead of every field stacking separately. */
+  .docket-row > div:first-child { grid-column: 1; grid-row: 1; min-width: 0; }
+  .docket-row__status { grid-column: 2; grid-row: 1; justify-self: end; align-self: start; }
   .docket-row .btn--danger,
-  .docket-row .btn--ghost { justify-self: end; }
+  .docket-row .btn--ghost { grid-column: 3; grid-row: 1; justify-self: end; }
+  .docket-row__value { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
+  .docket-row__deadline { grid-column: 1 / -1; grid-row: 3; justify-self: start; }
 }
 
 /* ---- dialog / claim detail ---- */

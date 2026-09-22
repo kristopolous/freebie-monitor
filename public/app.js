@@ -189,6 +189,7 @@ document.getElementById('settingsForm').addEventListener('submit', async (e) => 
   document.getElementById('pipelineStatus').textContent = 'Re-scanning with your changes…';
   await fetchDeals();
   setActiveNav('deals');
+  syncViewToUrl('deals');
 });
 
 function openSettings() {
