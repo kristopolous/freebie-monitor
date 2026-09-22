@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Freebie Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="masthead">
+    <div class="masthead__title">
+      <span class="masthead__mark">✦</span>
+      <h1>Freebie Monitor</h1>
+    </div>
+    <div class="masthead__meta" id="scoreTotal">$0 scored so far</div>
+    <nav class="masthead__nav" id="mainNav" hidden>
+      <button data-nav="deals" class="nav-link is-active">Drops</button>
+      <button data-nav="brain" class="nav-link">To-Do</button>
+      <button data-nav="settings" class="nav-link">Settings</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ONBOARDING -->
+    <section id="view-onboard" class="view">
+      <div class="intake">
+        <p class="intake__lede">
+          Companies are handing out free money right now — sign-up bonuses, cashback, bank
+          bonuses. Most of it isn't worth your time. Answer six quick questions and your agent
+          finds what actually is.
+        </p>
+
+        <form id="onboardForm" class="intake__form">
+          <div class="question-fields" id="onboardFields"></div>
+          <button type="submit" class="btn btn--primary" id="startBtn" disabled>Show me what I can score &rarr;</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="view-settings" class="view" hidden>
+      <div class="intake">
+        <p class="intake__lede">Change your answers any time — your agent re-scans with the update.</p>
+        <form id="settingsForm" class="intake__form">
+          <div class="question-fields" id="settingsFields"></div>
+          <button type="submit" class="btn btn--primary" id="saveSettingsBtn">Save changes</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- AGENT PIPELINE / LOADING -->
+    <section id="view-pipeline" class="view" hidden>
+      <div class="pipeline">
+        <p class="pipeline__status" id="pipelineStatus">Scanning for free money…</p>
+        <ol class="pipeline__chain">
+          <li class="pipeline__node" data-node="scout">
+            <span class="pipeline__node-name">Scout</span>
+            <span class="pipeline__node-tool">Bright Data</span>
+            <span class="pipeline__node-job">finding current offers</span>
+          </li>
+          <li class="pipeline__node" data-node="matcher">
+            <span class="pipeline__node-name">Matcher</span>
+            <span class="pipeline__node-tool">Cognee</span>
+            <span class="pipeline__node-job">weighing against your file</span>
+          </li>
+          <li class="pipeline__node" data-node="strategist">
+            <span class="pipeline__node-name">Strategist</span>
+            <span class="pipeline__node-tool">Strands Agents</span>
+            <span class="pipeline__node-job">building the plan</span>
+          </li>
+          <li class="pipeline__node" data-node="actor">
+            <span class="pipeline__node-name">Actor</span>
+            <span class="pipeline__node-tool">Docker Sandbox</span>
+            <span class="pipeline__node-job">executing &amp; locking it in</span>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- DEALS / DROPS -->
+    <section id="view-deals" class="view" hidden>
+      <div class="deals">
+        <div class="deals__summary-row">
+          <p class="deals__summary" id="dealsSummary"></p>
+          <button class="btn btn--ghost btn--small" id="rescanBtn" title="Runs a fresh scan instead of using the cached results">↻ Rescan</button>
+        </div>
+        <div class="deals__grid" id="dealsGrid"></div>
+      </div>
+    </section>
+
+    <!-- TO-DO / TRACKER -->
+    <section id="view-brain" class="view" hidden>
+      <div class="docket">
+        <p class="docket__lede">
+          You do the real steps — opening the account, funding it, whatever it takes. Check each
+          one off here as you go, and your agent nags you if you're falling behind pace.
+        </p>
+        <div class="docket__list" id="docketList"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="score-pop-layer" id="scorePopLayer" hidden>
+    <div class="score-pop" id="scorePop"></div>
+  </div>
+
+  <dialog id="claimDialog" class="claim-dialog">
+    <div class="claim-dialog__inner">
+      <button class="claim-dialog__close" id="closeDialog" aria-label="Close">&times;</button>
+      <div id="claimDialogContent"></div>
+    </div>
+  </dialog>
+
+  <footer class="statusbar" id="statusbar"></footer>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# secrets — never commit real API keys
+.env
+agent/.env
+
+# Node
+node_modules/
+dist/
+.data/
+
+# Python
+agent/.venv/
+agent/__pycache__/
+agent/.cache/
+agent/.cognee_system/
+agent/.data_storage/
+agent/.cognee_cache/
+*.pyc
+
+# misc
+.DS_Store

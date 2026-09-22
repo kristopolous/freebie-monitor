@@ -1,0 +1,25 @@
+{
+  "name": "freebie-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Battle of the Personal Brains — personalized rewards agent (Cognee + AWS Strands Agents + Bright Data + Docker Sandboxes)",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@strands-agents/harness": "^0.1.0",
+    "@strands-agents/sdk": "^1.17.0",
+    "hono": "^4.6.0",
+    "openai": "^6.49.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

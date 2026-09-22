@@ -1,0 +1,5 @@
+# Python 3.10 to 3.14
+strands-agents>=1.56.0
+python-dotenv>=1.0
+httpx>=0.27
+openai>=1.0   # peer dep for strands.models.openai (our local-model fallback)

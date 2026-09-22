@@ -1,0 +1,527 @@
+const STORAGE_KEY = 'freebie-monitor-profile-id';
+
+const state = {
+  profileId: null,
+  answers: {},
+  deals: [],
+};
+
+const views = {
+  onboard: document.getElementById('view-onboard'),
+  settings: document.getElementById('view-settings'),
+  pipeline: document.getElementById('view-pipeline'),
+  deals: document.getElementById('view-deals'),
+  brain: document.getElementById('view-brain'),
+};
+
+function showView(name) {
+  for (const [key, el] of Object.entries(views)) el.hidden = key !== name;
+}
+
+// ---- question form (shared by onboarding + settings) ----
+
+const QUESTIONS = [
+  { field: 'ownsHome', legend: 'Do you own a home?', options: [['true', 'Yes'], ['false', 'No']] },
+  {
+    field: 'flightsPerYear',
+    legend: 'How often do you fly?',
+    options: [['none', 'Rarely'], ['a-few', 'A few times a year'], ['frequent', 'Frequently']],
+  },
+  {
+    field: 'idleCashBracket',
+    legend: 'How much cash is sitting idle, earning close to nothing?',
+    options: [
+      ['none', 'None to speak of'],
+      ['under-10k', 'Under $10k'],
+      ['10k-50k', '$10k–$50k'],
+      ['50k-plus', '$50k+'],
+    ],
+  },
+  {
+    field: 'bigBoxShopper',
+    legend: "Do you shop at big-box stores — Lowe's, Home Depot, and the like?",
+    options: [['true', 'Yes'], ['false', 'No']],
+  },
+  {
+    field: 'openToNewAccounts',
+    legend: 'Open to opening a new account or card for a bonus?',
+    options: [['true', 'Yes'], ['false', 'No, existing accounts only']],
+  },
+  {
+    field: 'primaryGoal',
+    legend: 'What are you mainly after?',
+    options: [['travel', 'Travel'], ['cashback', 'Cash back'], ['either', 'Either works']],
+  },
+];
+const REQUIRED_FIELDS = QUESTIONS.map((q) => q.field);
+
+function parseChipValue(raw) {
+  return raw === 'true' ? true : raw === 'false' ? false : raw;
+}
+
+/** Renders the question set into `container`, pre-selecting `initial`, and keeps `answersRef` in sync as the person clicks. */
+function buildQuestionFields(container, initial, answersRef, onChange) {
+  container.innerHTML = QUESTIONS.map(
+    (q) => `
+    <fieldset class="question">
+      <legend>${q.legend}</legend>
+      <div class="chip-row" data-field="${q.field}">
+        ${q.options.map(([v, l]) => `<button type="button" class="chip" data-value="${v}">${l}</button>`).join('')}
+      </div>
+    </fieldset>
+  `,
+  ).join('');
+
+  for (const row of container.querySelectorAll('.chip-row')) {
+    const field = row.dataset.field;
+    if (field in initial) {
+      const btn = row.querySelector(`.chip[data-value="${String(initial[field])}"]`);
+      if (btn) btn.classList.add('is-selected');
+    }
+    row.addEventListener('click', (e) => {
+      const btn = e.target.closest('.chip');
+      if (!btn) return;
+      for (const c of row.querySelectorAll('.chip')) c.classList.remove('is-selected');
+      btn.classList.add('is-selected');
+      answersRef[field] = parseChipValue(btn.dataset.value);
+      onChange();
+    });
+  }
+}
+
+// ---- tiers ----
+
+function tierFor(relevanceScore) {
+  if (relevanceScore >= 80) return { label: 'LEGENDARY', varName: '--gold' };
+  if (relevanceScore >= 60) return { label: 'RARE', varName: '--hot' };
+  return { label: 'COMMON', varName: '--common' };
+}
+
+// ---- masthead / status ----
+
+async function loadStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const s = await res.json();
+    document.getElementById('statusbar').innerHTML = [
+      ['Cognee', s.cognee],
+      ['Bright Data', s.brightData],
+      ['Model', s.model],
+      ['Docker', s.docker],
+    ]
+      .map(([label, val]) => `<span>${label}: <b>${val}</b></span>`)
+      .join('');
+  } catch {
+    // status bar is a nice-to-have; a failed fetch shouldn't block anything
+  }
+}
+
+async function refreshScoreTotal() {
+  if (!state.profileId) return;
+  try {
+    const res = await fetch(`/api/commitments?profileId=${state.profileId}`);
+    const { commitments } = await res.json();
+    // Only what's actually been earned (every ticket complete) counts —
+    // "tracking" is intent, not money in hand yet.
+    const total = commitments.filter((c) => c.status === 'fulfilled').reduce((sum, c) => sum + c.personalValueUsd, 0);
+    document.getElementById('scoreTotal').textContent = `$${total.toLocaleString()} scored so far`;
+  } catch {
+    // non-critical
+  }
+}
+
+// ---- onboarding ----
+
+const startBtn = document.getElementById('startBtn');
+
+function checkOnboardComplete() {
+  startBtn.disabled = !REQUIRED_FIELDS.every((f) => f in state.answers);
+}
+
+document.getElementById('onboardForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  showView('pipeline');
+  animatePipeline(['scout', 'matcher']);
+  document.getElementById('pipelineStatus').textContent = 'Booting up your monitor…';
+
+  const res = await fetch('/api/onboard', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state.answers),
+  });
+  const { profile } = await res.json();
+  state.profileId = profile.id;
+  localStorage.setItem(STORAGE_KEY, profile.id);
+
+  document.getElementById('mainNav').hidden = false;
+  await fetchDeals();
+  await refreshScoreTotal();
+});
+
+// ---- settings ----
+
+document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const res = await fetch(`/api/profile/${state.profileId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state.answers),
+  });
+  const { profile } = await res.json();
+  state.answers = profile.answers;
+
+  showView('pipeline');
+  animatePipeline(['scout', 'matcher']);
+  document.getElementById('pipelineStatus').textContent = 'Re-scanning with your changes…';
+  await fetchDeals();
+  setActiveNav('deals');
+});
+
+function openSettings() {
+  buildQuestionFields(document.getElementById('settingsFields'), state.answers, state.answers, () => {});
+  showView('settings');
+}
+
+// ---- pipeline animation ----
+
+function animatePipeline(order) {
+  const nodes = document.querySelectorAll('.pipeline__node');
+  for (const n of nodes) n.classList.remove('is-active', 'is-done');
+  order.forEach((name, i) => {
+    setTimeout(() => {
+      const node = document.querySelector(`[data-node="${name}"]`);
+      node.classList.add('is-active');
+      if (i > 0) {
+        const prev = document.querySelector(`[data-node="${order[i - 1]}"]`);
+        prev.classList.remove('is-active');
+        prev.classList.add('is-done');
+      }
+    }, i * 650);
+  });
+}
+
+// ---- deals / drops ----
+
+async function fetchDeals(force = false) {
+  document.getElementById('pipelineStatus').textContent = 'Scanning for free money…';
+  const res = await fetch(`/api/deals?profileId=${state.profileId}${force ? '&force=true' : ''}`);
+  const { deals } = await res.json();
+  state.deals = deals;
+  renderDeals();
+  showView('deals');
+  setActiveNav('deals');
+}
+
+document.getElementById('rescanBtn').addEventListener('click', async () => {
+  showView('pipeline');
+  animatePipeline(['scout', 'matcher']);
+  document.getElementById('pipelineStatus').textContent = 'Rescanning for free money…';
+  await fetchDeals(true);
+});
+
+function renderDeals() {
+  const grid = document.getElementById('dealsGrid');
+  const summary = document.getElementById('dealsSummary');
+
+  if (state.deals.length === 0) {
+    summary.textContent = "Nothing worth chasing — you said you're not open to new accounts, so there's nothing here to grab.";
+    grid.innerHTML = '';
+    return;
+  }
+
+  const worthIt = state.deals.filter((d) => d.relevanceScore >= 50);
+  summary.textContent = `${state.deals.length} drops found this week. ${worthIt.length} are actually worth grabbing.`;
+
+  grid.innerHTML = state.deals
+    .map((d) => {
+      const tier = tierFor(d.relevanceScore);
+      return `
+    <article class="deal-card" style="--tier-color: var(${tier.varName})">
+      <span class="deal-card__tier">${tier.label}</span>
+      <span class="deal-card__institution">${escapeHtml(d.institution)}</span>
+      <h3 class="deal-card__title">${escapeHtml(d.title)}</h3>
+      <div class="deal-card__value">$${d.personalValueUsd.toLocaleString()}</div>
+      <p class="deal-card__reasoning">${escapeHtml(d.reasoning)}</p>
+      <div class="deal-card__rule">
+        <span class="deal-card__rule-label">The rule</span>
+        <p class="deal-card__rule-text">${escapeHtml(d.requirement)}</p>
+      </div>
+      <button class="btn btn--secondary" data-track="${d.id}">I'm doing this</button>
+    </article>
+  `;
+    })
+    .join('');
+
+  grid.querySelectorAll('[data-track]').forEach((btn) => {
+    btn.addEventListener('click', () => trackDeal(btn.dataset.track));
+  });
+}
+
+async function trackDeal(dealId) {
+  const deal = state.deals.find((d) => d.id === dealId);
+  if (!deal) return;
+
+  showView('pipeline');
+  document.getElementById('pipelineStatus').textContent = `Building your tickets for ${deal.title}…`;
+  animatePipeline(['strategist', 'actor']);
+
+  const res = await fetch('/api/deals/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profileId: state.profileId, deal }),
+  });
+  const { commitment } = await res.json();
+
+  showView('deals');
+  openTrackedDetail(deal, commitment);
+  refreshScoreTotal();
+}
+
+function fireScorePop(value) {
+  const layer = document.getElementById('scorePopLayer');
+  const pop = document.getElementById('scorePop');
+  pop.textContent = `+$${value.toLocaleString()} LOCKED IN`;
+  layer.hidden = false;
+  pop.classList.remove('is-popping');
+  void pop.offsetWidth; // restart animation
+  pop.classList.add('is-popping');
+  setTimeout(() => (layer.hidden = true), 1600);
+}
+
+function openTrackedDetail(deal, commitment) {
+  const plan = commitment.plan;
+  const days = Math.max(0, Math.round((new Date(plan.deadline) - new Date()) / 86400000));
+
+  document.getElementById('claimDialogContent').innerHTML = `
+    <div class="claim-detail">
+      <h3>${escapeHtml(deal.title)}</h3>
+      <p class="claim-detail__sub">${escapeHtml(deal.institution)} · due in ${days} days · your agent is tracking it now</p>
+      <ol class="claim-detail__steps">
+        ${plan.tickets.map((t) => `<li>${escapeHtml(t.title)}</li>`).join('')}
+      </ol>
+      <p class="claim-detail__hint">Go do these yourself, then check them off under <b>To-Do</b> as you go.</p>
+      <div class="claim-detail__artifact">${escapeHtml(plan.artifact.content)}</div>
+      <details class="claim-detail__log-toggle">
+        <summary>Technical proof (Docker sandbox log)</summary>
+        <div class="claim-detail__log">${escapeHtml(plan.sandboxLog || '(no log)')}</div>
+      </details>
+    </div>
+  `;
+  document.getElementById('claimDialog').showModal();
+}
+
+document.getElementById('closeDialog').addEventListener('click', () => {
+  document.getElementById('claimDialog').close();
+});
+
+// ---- docket ("your brain") ----
+
+const STATUS_LABEL = { tracking: 'IN PROGRESS', fulfilled: 'SCORED', missed: 'MISSED' };
+
+function isTicketComplete(t) {
+  if (t.kind === 'target') return (t.currentAmount ?? 0) >= (t.targetAmount ?? Infinity);
+  if (t.kind === 'action') return Boolean(t.done);
+  return true;
+}
+
+async function fetchDocket() {
+  const res = await fetch(`/api/commitments?profileId=${state.profileId}`);
+  const { commitments } = await res.json();
+  renderDocket(commitments);
+}
+
+function renderTicket(ticket, index, daysLeft, complete, overdue) {
+  const dateLabel = new Date(ticket.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const dateSub = complete ? 'done' : overdue ? `${dateLabel} · overdue` : `${dateLabel} · ${daysLeft}d left`;
+
+  let body;
+  if (ticket.kind === 'action') {
+    body = `
+      <label class="ticket__check">
+        <input type="checkbox" data-toggle="${index}" ${ticket.done ? 'checked' : ''} />
+        <span class="${ticket.done ? 'ticket-done' : ''}">${escapeHtml(ticket.title)}</span>
+      </label>`;
+  } else if (ticket.kind === 'target') {
+    const target = ticket.targetAmount ?? 0;
+    const current = ticket.currentAmount ?? 0;
+    const remaining = Math.max(0, target - current);
+    const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
+    const unit = ticket.unit ?? '$';
+    body = `
+      <div class="ticket__target">
+        <span class="${complete ? 'ticket-done' : ''}">${escapeHtml(ticket.title)}</span>
+        <div class="ticket__progress-bar"><div class="ticket__progress-fill" style="width:${pct}%"></div></div>
+        <div class="ticket__progress-text">
+          ${unit}${current.toLocaleString()} / ${unit}${target.toLocaleString()}${complete ? '' : ` — ${unit}${remaining.toLocaleString()} more`}
+        </div>
+        ${
+          complete
+            ? ''
+            : `<form class="ticket__report" data-report="${index}">
+                 <input type="number" min="0" step="1" placeholder="e.g. ${current || 400}" />
+                 <button type="submit" class="btn btn--ghost">I've put in</button>
+               </form>`
+        }
+      </div>`;
+  } else {
+    body = `<span class="ticket__deadline-label">${escapeHtml(ticket.title)}</span>`;
+  }
+
+  return `
+    <li class="ticket ticket--${ticket.kind} ${complete ? 'is-complete' : ''} ${overdue ? 'is-overdue' : ''}">
+      <span class="ticket__dot"></span>
+      <div class="ticket__body">
+        <div class="ticket__date">${dateSub}</div>
+        ${body}
+      </div>
+    </li>`;
+}
+
+function renderDocket(commitments) {
+  const list = document.getElementById('docketList');
+  if (commitments.length === 0) {
+    list.innerHTML = `<p class="docket-empty">Nothing yet. Say you're doing one and it'll show up here.</p>`;
+    return;
+  }
+
+  const now = Date.now();
+  list.innerHTML = commitments
+    .map((c) => {
+      const days = Math.round((new Date(c.deadline) - now) / 86400000);
+      const deadlineText = days <= 0 ? 'due now' : `${days} day${days === 1 ? '' : 's'} left`;
+      const actionable = c.plan.tickets.filter((t) => t.kind !== 'deadline');
+      const doneCount = actionable.filter(isTicketComplete).length;
+
+      const withIndex = c.plan.tickets.map((t, i) => ({ t, i }));
+      withIndex.sort((a, b) => new Date(a.t.deadline) - new Date(b.t.deadline));
+      const ticketsHtml = withIndex
+        .map(({ t, i }) => {
+          const complete = isTicketComplete(t);
+          const daysLeft = Math.round((new Date(t.deadline).getTime() - now) / 86400000);
+          const overdue = !complete && daysLeft < 0 && t.kind !== 'deadline';
+          return renderTicket(t, i, daysLeft, complete, overdue);
+        })
+        .join('');
+
+      return `
+      <div class="docket-item" data-commitment="${c.id}">
+        <div class="docket-row">
+          <div>
+            <div class="docket-row__title">${escapeHtml(c.dealTitle)}</div>
+            <div class="docket-row__institution">${escapeHtml(c.institution)} · ${doneCount}/${actionable.length} done</div>
+          </div>
+          <div class="docket-row__value">$${c.personalValueUsd.toLocaleString()}</div>
+          <div class="docket-row__deadline">${deadlineText}</div>
+          <div class="docket-row__status docket-row__status--${c.status}">${STATUS_LABEL[c.status] ?? c.status}</div>
+        </div>
+        ${c.nag ? `<p class="docket-nag">⚠ ${escapeHtml(c.nag)}</p>` : ''}
+        <ul class="ticket-timeline">${ticketsHtml}</ul>
+      </div>
+    `;
+    })
+    .join('');
+
+  list.querySelectorAll('[data-toggle]').forEach((input) => {
+    input.addEventListener('change', (e) => {
+      const item = e.target.closest('.docket-item');
+      toggleTicket(item.dataset.commitment, Number(e.target.dataset.toggle), e.target.checked);
+    });
+  });
+
+  list.querySelectorAll('[data-report]').forEach((form) => {
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const item = e.target.closest('.docket-item');
+      const input = e.target.querySelector('input[type="number"]');
+      const amount = Number(input.value);
+      if (Number.isFinite(amount) && amount >= 0) {
+        reportProgress(item.dataset.commitment, Number(e.target.dataset.report), amount);
+      }
+    });
+  });
+}
+
+async function toggleTicket(commitmentId, ticketIndex, done) {
+  const res = await fetch(`/api/commitments/${commitmentId}/tickets/${ticketIndex}/toggle`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ done }),
+  });
+  const { commitment } = await res.json();
+  if (commitment.status === 'fulfilled' && done) fireScorePop(commitment.personalValueUsd);
+  await fetchDocket();
+  await refreshScoreTotal();
+}
+
+async function reportProgress(commitmentId, ticketIndex, currentAmount) {
+  const res = await fetch(`/api/commitments/${commitmentId}/tickets/${ticketIndex}/report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentAmount }),
+  });
+  const { commitment } = await res.json();
+  if (commitment.status === 'fulfilled') fireScorePop(commitment.personalValueUsd);
+  await fetchDocket();
+  await refreshScoreTotal();
+}
+
+// ---- nav ----
+
+function setActiveNav(name) {
+  document.querySelectorAll('.nav-link').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.nav === name);
+  });
+}
+
+document.querySelectorAll('[data-nav]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.nav;
+    setActiveNav(target);
+    if (target === 'brain') {
+      fetchDocket();
+      showView('brain');
+    } else if (target === 'settings') {
+      openSettings();
+    } else {
+      showView('deals');
+    }
+  });
+});
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ---- init: restore from localStorage on refresh, or start onboarding ----
+
+async function init() {
+  loadStatus();
+
+  const savedId = localStorage.getItem(STORAGE_KEY);
+  if (savedId) {
+    try {
+      const res = await fetch(`/api/profile/${savedId}`);
+      if (res.ok) {
+        const { profile } = await res.json();
+        state.profileId = profile.id;
+        state.answers = profile.answers;
+        document.getElementById('mainNav').hidden = false;
+        showView('pipeline');
+        document.getElementById('pipelineStatus').textContent = 'Welcome back — scanning for free money…';
+        animatePipeline(['scout', 'matcher']);
+        await fetchDeals();
+        await refreshScoreTotal();
+        return;
+      }
+    } catch {
+      // fall through to onboarding
+    }
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  buildQuestionFields(document.getElementById('onboardFields'), {}, state.answers, checkOnboardComplete);
+}
+
+init();
