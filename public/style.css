@@ -427,7 +427,7 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
 }
 
 .calendar__day {
-  min-height: 84px;
+  aspect-ratio: 1 / 1;
   background: var(--surface);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius);
@@ -435,6 +435,7 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow: hidden;
 }
 .calendar__day--other-month { opacity: 0.35; }
 .calendar__day--today { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
@@ -461,7 +462,7 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
 
 @media (max-width: 640px) {
   .calendar__weekdays span:nth-child(n) { font-size: 9px; }
-  .calendar__day { min-height: 56px; padding: 4px; }
+  .calendar__day { padding: 4px; }
   .calendar__pill { font-size: 8.5px; padding: 1px 3px; }
 }
 
