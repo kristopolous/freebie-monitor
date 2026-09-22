@@ -125,6 +125,9 @@ function heuristicScore(deal: DealCandidate, answers: OnboardingAnswers): Scored
     if (answers.bigBoxShopper) {
       score += 15;
       reasons.push('you already shop at big-box retailers like this one');
+    } else {
+      score -= 20;
+      reasons.push("you said you don't shop at big-box stores, so a card here mostly goes unused");
     }
   }
 
