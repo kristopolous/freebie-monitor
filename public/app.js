@@ -323,7 +323,7 @@ document.getElementById('claimDialog').addEventListener('close', () => {
 
 // ---- docket ("your brain") ----
 
-const STATUS_LABEL = { tracking: 'IN PROGRESS', fulfilled: 'SCORED', missed: 'MISSED' };
+const STATUS_LABEL = { tracking: 'IN PROGRESS', fulfilled: 'SCORED', missed: 'MISSED', cancelled: 'CANCELLED' };
 
 function isTicketComplete(t) {
   if (t.kind === 'target') return (t.currentAmount ?? 0) >= (t.targetAmount ?? Infinity);
@@ -420,6 +420,7 @@ function renderDocket(commitments) {
           <div class="docket-row__value">$${c.personalValueUsd.toLocaleString()}</div>
           <div class="docket-row__deadline">${deadlineText}</div>
           <div class="docket-row__status docket-row__status--${c.status}">${STATUS_LABEL[c.status] ?? c.status}</div>
+          ${c.status === 'tracking' ? `<button type="button" class="btn btn--ghost btn--small" data-cancel>Back out</button>` : ''}
         </div>
         ${c.nag ? `<p class="docket-nag">⚠ ${escapeHtml(c.nag)}</p>` : ''}
         <ul class="ticket-timeline">${ticketsHtml}</ul>
@@ -427,6 +428,13 @@ function renderDocket(commitments) {
     `;
     })
     .join('');
+
+  list.querySelectorAll('[data-cancel]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const item = btn.closest('.docket-item');
+      cancelCommitment(item.dataset.commitment);
+    });
+  });
 
   list.querySelectorAll('[data-toggle]').forEach((input) => {
     input.addEventListener('change', (e) => {
@@ -470,6 +478,11 @@ async function reportProgress(commitmentId, ticketIndex, currentAmount) {
   if (commitment.status === 'fulfilled') fireScorePop(commitment.personalValueUsd);
   await fetchDocket();
   await refreshScoreTotal();
+}
+
+async function cancelCommitment(commitmentId) {
+  await fetch(`api/commitments/${commitmentId}/cancel`, { method: 'POST' });
+  await fetchDocket();
 }
 
 // ---- calendar ----
@@ -611,10 +624,15 @@ async function init() {
         await refreshScoreTotal();
         return;
       }
+      // A definitive "this profile doesn't exist" (404) means the saved id is
+      // genuinely stale. Anything else (500/502/503 from a mid-restart proxy
+      // hiccup, a flaky response) is transient and must NOT wipe the user's
+      // saved session over it — fall through to onboarding for just this
+      // load and leave the id in place so the next successful load recovers it.
+      if (res.status === 404) localStorage.removeItem(STORAGE_KEY);
     } catch {
-      // fall through to onboarding
+      // network/proxy hiccup — leave the saved id alone, just show onboarding for now
     }
-    localStorage.removeItem(STORAGE_KEY);
   }
 
   buildQuestionFields(document.getElementById('onboardFields'), {}, state.answers, checkOnboardComplete);

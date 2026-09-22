@@ -76,6 +76,6 @@ export interface Commitment {
   personalValueUsd: number;
   deadline: string;
   createdAt: string;
-  status: 'tracking' | 'fulfilled' | 'missed';
+  status: 'tracking' | 'fulfilled' | 'missed' | 'cancelled';
   plan: ExecutionPlan;
 }

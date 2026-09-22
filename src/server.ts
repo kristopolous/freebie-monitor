@@ -16,7 +16,16 @@ import { getCogneeClient } from './integrations/cognee.js';
 import { hasModelCredentials } from './integrations/model.js';
 import { brightDataIsLive } from './integrations/brightdata.js';
 import { dockerIsAvailable } from './integrations/sandbox.js';
-import { getProfile, listCommitments, saveCommitment, saveProfile, updateProfile, toggleTicket, reportTicketProgress } from './store.js';
+import {
+  getProfile,
+  listCommitments,
+  saveCommitment,
+  saveProfile,
+  updateProfile,
+  toggleTicket,
+  reportTicketProgress,
+  cancelCommitment,
+} from './store.js';
 import { computeNag } from './nag.js';
 import { getCachedDeals, setCachedDeals, invalidateDeals } from './dealsCache.js';
 import { getCachedPlan, setCachedPlan } from './plansCache.js';
@@ -87,6 +96,23 @@ app.patch('/api/profile/:id', async (c) => {
   return c.json({ profile });
 });
 
+// Builds and caches the Strategist plan for every deal a scan just returned, so clicking
+// "I'm doing this" later is a cache hit instead of a fresh ~15-25s LLM call. Fire-and-forget:
+// runs after the response for THIS request is already on its way, never blocks Drops from
+// showing. Plans are keyed by dealId alone (see plansCache.ts) so this warms the cache for
+// every future profile that sees the same deal too, not just this one.
+async function prewarmPlans(deals: PersonalizedDeal[], profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>) {
+  for (const deal of deals) {
+    if (await getCachedPlan(deal.id)) continue;
+    try {
+      const plan = await runStrategist(deal, profile);
+      await setCachedPlan(deal.id, plan);
+    } catch (err) {
+      console.warn('[prewarm] plan generation failed for', deal.id, err);
+    }
+  }
+}
+
 app.get('/api/deals', async (c) => {
   const profileId = c.req.query('profileId');
   if (!profileId) return c.json({ error: 'profileId required' }, 400);
@@ -102,6 +128,7 @@ app.get('/api/deals', async (c) => {
   const candidates = await runScout();
   const deals = await runMatcher(profile, candidates);
   await setCachedDeals(profileId, deals);
+  void prewarmPlans(deals, profile);
   return c.json({ deals, cached: false });
 });
 
@@ -122,10 +149,10 @@ app.post('/api/deals/track', async (c) => {
   if (!profile) return c.json({ error: 'unknown profile' }, 404);
 
   const deal = parsed.data.deal;
-  let plan = getCachedPlan(deal.id);
+  let plan = await getCachedPlan(deal.id);
   if (!plan) {
     plan = await runStrategist(deal, profile);
-    setCachedPlan(deal.id, plan);
+    await setCachedPlan(deal.id, plan);
   }
   const trackedPlan = await runActor(deal, plan, profile);
 
@@ -193,6 +220,14 @@ app.post('/api/commitments/:id/tickets/:index/toggle', async (c) => {
   await mirrorTicketEventToCognee(commitment.profileId, commitment, ticketIndex);
 
   return c.json({ commitment: { ...commitment, nag: computeNag(commitment) } });
+});
+
+// The person backs out of a deal they'd committed to before it's fulfilled —
+// drops it off the active To-Do/nag list without erasing the history.
+app.post('/api/commitments/:id/cancel', async (c) => {
+  const commitment = await cancelCommitment(c.req.param('id'));
+  if (!commitment) return c.json({ error: 'unknown commitment, or already fulfilled' }, 404);
+  return c.json({ commitment });
 });
 
 const ReportProgressSchema = z.object({ currentAmount: z.number().nonnegative() });

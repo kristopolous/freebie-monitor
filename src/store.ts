@@ -110,3 +110,19 @@ export async function reportTicketProgress(
   await writeJson('commitments.json', commitments);
   return commitment;
 }
+
+/**
+ * The person backs out of pursuing a deal they'd committed to — they never
+ * started, or changed their mind. Kept in history as 'cancelled' rather than
+ * deleted, so it drops off the active To-Do/nag list without erasing the
+ * record.
+ */
+export async function cancelCommitment(id: string): Promise<Commitment | undefined> {
+  const commitments = await readJson<Commitment[]>('commitments.json', []);
+  const commitment = commitments.find((c) => c.id === id);
+  if (!commitment || commitment.status === 'fulfilled') return undefined;
+
+  commitment.status = 'cancelled';
+  await writeJson('commitments.json', commitments);
+  return commitment;
+}
