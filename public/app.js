@@ -315,6 +315,12 @@ document.getElementById('closeDialog').addEventListener('click', () => {
   document.getElementById('claimDialog').close();
 });
 
+// Closing the confirmation (via the button, Esc, or a backdrop click) should
+// land you on the tickets you just committed to, not back on the deal shelf.
+document.getElementById('claimDialog').addEventListener('close', () => {
+  navigateTo('brain');
+});
+
 // ---- docket ("your brain") ----
 
 const STATUS_LABEL = { tracking: 'IN PROGRESS', fulfilled: 'SCORED', missed: 'MISSED' };
