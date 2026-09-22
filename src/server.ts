@@ -38,6 +38,7 @@ const OnboardingSchema = z.object({
   ownsHome: z.boolean(),
   flightsPerYear: z.enum(['none', 'a-few', 'frequent']),
   idleCashBracket: z.enum(['none', 'under-10k', '10k-50k', '50k-plus']),
+  monthlyDirectDeposit: z.enum(['none', 'under-1k', '1k-3k', '3k-10k', '10k-plus']),
   bigBoxShopper: z.boolean(),
   openToNewAccounts: z.boolean(),
   primaryGoal: z.enum(['travel', 'cashback', 'either']),
@@ -161,6 +162,13 @@ app.post('/api/deals/track', async (c) => {
   if (!profile) return c.json({ error: 'unknown profile' }, 404);
 
   const deal = parsed.data.deal;
+
+  // Clicking "I'm doing this" again on a deal already being actively
+  // tracked reopens that same commitment instead of creating a duplicate -
+  // also skips paying for another Strategist/Actor run.
+  const existing = (await listCommitments(profile.id)).find((c) => c.dealId === deal.id && c.status === 'tracking');
+  if (existing) return c.json({ commitment: existing });
+
   let plan = await getCachedPlan(deal.id);
   if (!plan) {
     plan = await runStrategist(deal, profile);

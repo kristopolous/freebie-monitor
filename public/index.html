@@ -19,7 +19,7 @@
     <div class="masthead__meta" id="scoreTotal">$0</div>
     <nav class="masthead__nav" id="mainNav" hidden>
       <button data-nav="deals" class="nav-link is-active">Drops</button>
-      <button data-nav="brain" class="nav-link">To-Do</button>
+      <button data-nav="brain" class="nav-link">To-Do<span class="nav-badge" id="brainBadge" hidden></span></button>
       <button data-nav="calendar" class="nav-link">Calendar</button>
       <button data-nav="settings" class="nav-link">Settings</button>
     </nav>
@@ -89,6 +89,10 @@
           <p class="deals__summary" id="dealsSummary"></p>
         </div>
         <div class="deals__grid" id="dealsGrid"></div>
+        <div class="deals__disqualified" id="disqualifiedSection" hidden>
+          <h3 class="deals__disqualified-heading">Not eligible</h3>
+          <div class="deals__grid" id="disqualifiedGrid"></div>
+        </div>
       </div>
     </section>
 

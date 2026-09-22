@@ -2,6 +2,11 @@ export interface OnboardingAnswers {
   ownsHome: boolean;
   flightsPerYear: 'none' | 'a-few' | 'frequent';
   idleCashBracket: 'none' | 'under-10k' | '10k-50k' | '50k-plus';
+  // Separate from idleCashBracket on purpose: many bank bonuses qualify off
+  // a recurring paycheck-sized direct deposit, not a lump sum sitting idle —
+  // someone with $0 idle cash can still easily clear a $500 direct-deposit
+  // requirement if that's close to what they're paid.
+  monthlyDirectDeposit: 'none' | 'under-1k' | '1k-3k' | '3k-10k' | '10k-plus';
   bigBoxShopper: boolean;
   openToNewAccounts: boolean;
   primaryGoal: 'travel' | 'cashback' | 'either';
@@ -29,6 +34,11 @@ export interface PersonalizedDeal extends DealCandidate {
   relevanceScore: number;
   personalValueUsd: number;
   reasoning: string;
+  // A hard eligibility wall (e.g. a $100k balance requirement someone can't
+  // meet), not just a low-relevance preference mismatch — kept separate
+  // from relevanceScore so the UI can call it out explicitly.
+  disqualified?: boolean;
+  disqualifyReason?: string;
 }
 
 export type TicketKind = 'action' | 'target' | 'deadline';

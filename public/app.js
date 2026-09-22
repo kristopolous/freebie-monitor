@@ -39,6 +39,17 @@ const QUESTIONS = [
     ],
   },
   {
+    field: 'monthlyDirectDeposit',
+    legend: 'About how much hits your account per month via direct deposit (paycheck, etc.)?',
+    options: [
+      ['none', 'No direct deposit set up'],
+      ['under-1k', 'Under $1k'],
+      ['1k-3k', '$1k–$3k'],
+      ['3k-10k', '$3k–$10k'],
+      ['10k-plus', '$10k+'],
+    ],
+  },
+  {
     field: 'bigBoxShopper',
     legend: "Do you shop at big-box stores — Lowe's, Home Depot, and the like?",
     options: [['true', 'Yes'], ['false', 'No']],
@@ -64,6 +75,7 @@ const DEFAULT_ANSWERS = {
   ownsHome: false,
   flightsPerYear: 'none',
   idleCashBracket: 'none',
+  monthlyDirectDeposit: 'none',
   bigBoxShopper: false,
   openToNewAccounts: true,
   primaryGoal: 'either',
@@ -121,7 +133,6 @@ async function loadStatus() {
       ['Cognee', s.cognee],
       ['Bright Data', s.brightData],
       ['Model', s.model],
-      ['Docker', s.docker],
     ]
       .map(([label, val]) => `<span>${label}: <b>${val}</b></span>`)
       .join('');
@@ -139,9 +150,28 @@ async function refreshScoreTotal() {
     // "tracking" is intent, not money in hand yet.
     const total = commitments.filter((c) => c.status === 'fulfilled').reduce((sum, c) => sum + c.personalValueUsd, 0);
     document.getElementById('scoreTotal').textContent = `$${total.toLocaleString()}`;
+    updateBrainBadge(commitments);
   } catch {
     // non-critical
   }
+}
+
+// Surfaces anything needing action soon right on the To-Do tab itself,
+// so it's visible without having to click in first. Overdue tickets count
+// too (a negative days-until is still "needs doing", more urgently so).
+function updateBrainBadge(commitments) {
+  const sevenDaysFromNow = Date.now() + 7 * 86400000;
+  let dueSoon = 0;
+  for (const c of commitments) {
+    if (c.status !== 'tracking') continue;
+    for (const t of c.plan.tickets) {
+      if (t.kind === 'deadline' || isTicketComplete(t)) continue;
+      if (new Date(t.deadline).getTime() <= sevenDaysFromNow) dueSoon++;
+    }
+  }
+  const badge = document.getElementById('brainBadge');
+  badge.textContent = dueSoon > 9 ? '9+' : String(dueSoon);
+  badge.hidden = dueSoon === 0;
 }
 
 // ---- onboarding ----
@@ -227,28 +257,19 @@ async function fetchDeals() {
   setActiveNav('deals');
 }
 
-function renderDeals() {
-  const grid = document.getElementById('dealsGrid');
-  const summary = document.getElementById('dealsSummary');
-
-  if (state.deals.length === 0) {
-    summary.textContent = "Nothing worth chasing — you said you're not open to new accounts, so there's nothing here to grab.";
-    grid.innerHTML = '';
-    return;
-  }
-
-  const worthIt = state.deals.filter((d) => d.relevanceScore >= 50);
-  summary.textContent = `${state.deals.length} drops found this week. ${worthIt.length} are actually worth grabbing.`;
-
-  grid.innerHTML = state.deals
-    .map((d) => {
-      const tier = tierFor(d.relevanceScore);
-      return `
-    <article class="deal-card" style="--tier-color: var(${tier.varName})">
+function dealCardHtml(d) {
+  const tier = tierFor(d.relevanceScore);
+  const favicon = faviconUrl(d.sourceUrl);
+  return `
+    <article class="deal-card ${d.disqualified ? 'deal-card--disqualified' : ''}" style="--tier-color: var(${tier.varName})">
       <span class="deal-card__tier">${tier.label}</span>
-      <span class="deal-card__institution">${escapeHtml(d.institution)}</span>
+      <div class="deal-card__institution-row">
+        ${favicon ? `<img class="deal-card__logo" src="${favicon}" alt="" width="20" height="20" loading="lazy" onerror="this.remove()" />` : ''}
+        <span class="deal-card__institution">${escapeHtml(d.institution)}</span>
+      </div>
       <h3 class="deal-card__title">${escapeHtml(d.title)}</h3>
       <div class="deal-card__value">$${d.personalValueUsd.toLocaleString()}</div>
+      ${d.disqualified ? `<div class="deal-card__disqualified">✕ Not eligible — ${escapeHtml(d.disqualifyReason ?? '')}</div>` : ''}
       <p class="deal-card__reasoning">${escapeHtml(d.reasoning)}</p>
       <div class="deal-card__rule">
         <span class="deal-card__rule-label">The rule</span>
@@ -257,10 +278,36 @@ function renderDeals() {
       <button class="btn btn--secondary" data-track="${d.id}">I'm doing this</button>
     </article>
   `;
-    })
-    .join('');
+}
 
-  grid.querySelectorAll('[data-track]').forEach((btn) => {
+function renderDeals() {
+  const grid = document.getElementById('dealsGrid');
+  const summary = document.getElementById('dealsSummary');
+  const disqualifiedSection = document.getElementById('disqualifiedSection');
+  const disqualifiedGrid = document.getElementById('disqualifiedGrid');
+
+  if (state.deals.length === 0) {
+    summary.textContent = "Nothing worth chasing — you said you're not open to new accounts, so there's nothing here to grab.";
+    grid.innerHTML = '';
+    disqualifiedSection.hidden = true;
+    return;
+  }
+
+  // Disqualified deals are still real, still seen and scored — just not
+  // reachable right now — so they stay fully visible, grouped into their
+  // own labeled "Not eligible" section instead of competing in the main
+  // grid with things you can actually get.
+  const eligible = state.deals.filter((d) => !d.disqualified);
+  const disqualified = state.deals.filter((d) => d.disqualified);
+
+  const worthIt = eligible.filter((d) => d.relevanceScore >= 50);
+  summary.textContent = `${eligible.length} drops found this week. ${worthIt.length} are actually worth grabbing.`;
+
+  grid.innerHTML = eligible.map(dealCardHtml).join('');
+  disqualifiedSection.hidden = disqualified.length === 0;
+  disqualifiedGrid.innerHTML = disqualified.map(dealCardHtml).join('');
+
+  document.querySelectorAll('[data-track]').forEach((btn) => {
     btn.addEventListener('click', () => trackDeal(btn.dataset.track));
   });
 }
@@ -697,6 +744,19 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// Live-scraped deals sometimes carry no sourceUrl at all - no real site to
+// derive a favicon from, so the logo is simply omitted rather than showing
+// a broken image.
+function faviconUrl(sourceUrl) {
+  if (!sourceUrl) return null;
+  try {
+    const host = new URL(sourceUrl).hostname;
+    return `https://www.google.com/s2/favicons?sz=64&domain=${host}`;
+  } catch {
+    return null;
+  }
 }
 
 // ---- init: restore from localStorage, or auto-start on defaults ----

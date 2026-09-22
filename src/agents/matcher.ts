@@ -21,6 +21,78 @@ function parseUsdEstimate(deal: DealCandidate): number {
   return best > 0 ? best : 100;
 }
 
+// Idle-cash brackets as a rough ceiling on what someone could realistically
+// park toward a lump-sum deposit/balance requirement — deliberately
+// conservative (the top of each bracket, not the middle) so this only
+// flags a deal as disqualifying when it's genuinely out of reach.
+const IDLE_CASH_CEILING: Record<OnboardingAnswers['idleCashBracket'], number> = {
+  none: 0,
+  'under-10k': 10_000,
+  '10k-50k': 50_000,
+  '50k-plus': Infinity,
+};
+
+// Separately, a recurring "$X in direct deposits" requirement is really
+// asking "is your paycheck at least this big?" — a totally different
+// question from "do you have this much sitting idle." Someone with $0
+// idle cash can still easily clear a $500/month direct-deposit bonus.
+const DIRECT_DEPOSIT_CEILING: Record<OnboardingAnswers['monthlyDirectDeposit'], number> = {
+  none: 0,
+  'under-1k': 1_000,
+  '1k-3k': 3_000,
+  '3k-10k': 10_000,
+  '10k-plus': Infinity,
+};
+
+interface Disqualification {
+  disqualified?: boolean;
+  disqualifyReason?: string;
+}
+
+// A low relevance score reads as "not a great fit" — it doesn't communicate
+// "you cannot actually get this." A deposit/balance requirement that
+// exceeds what someone said they have available is a hard eligibility
+// wall, not a preference mismatch, and deserves an explicit, deterministic
+// flag rather than hoping the model's free-text reasoning happens to say
+// so. A card's minimum SPEND requirement is a different kind of
+// constraint (spend, not cash sitting around) and isn't checked here.
+function checkDisqualification(deal: DealCandidate, answers: OnboardingAnswers): Disqualification {
+  const amounts = [...deal.requirement.matchAll(/\$([0-9][0-9,]*)/g)].map((m) => Number(m[1].replace(/,/g, '')));
+  if (amounts.length === 0) return { disqualified: false };
+  const required = Math.max(...amounts);
+
+  if (/direct deposit/i.test(deal.requirement)) {
+    // Profiles created before this question existed won't have an answer
+    // here — comparing a number against undefined is always false, which
+    // would wrongly flag every direct-deposit deal as disqualified for
+    // anyone who simply hasn't been asked yet. No data means no flag.
+    if (!answers.monthlyDirectDeposit) return { disqualified: false };
+    const ceiling = DIRECT_DEPOSIT_CEILING[answers.monthlyDirectDeposit];
+    if (required <= ceiling) return { disqualified: false };
+    const bracketLabel =
+      answers.monthlyDirectDeposit === 'none'
+        ? "you said you don't have direct deposits set up"
+        : `you said your direct deposits run up to $${ceiling.toLocaleString()}/month`;
+    return {
+      disqualified: true,
+      disqualifyReason: `Needs $${required.toLocaleString()} in direct deposits — ${bracketLabel}, so this isn't realistically reachable right now.`,
+    };
+  }
+
+  if (/deposit|balance|combined|new-to-|new funds/i.test(deal.requirement)) {
+    const ceiling = IDLE_CASH_CEILING[answers.idleCashBracket];
+    if (required <= ceiling) return { disqualified: false };
+    const bracketLabel =
+      answers.idleCashBracket === 'none' ? 'no idle cash to speak of' : `up to $${ceiling.toLocaleString()} in idle cash`;
+    return {
+      disqualified: true,
+      disqualifyReason: `Needs $${required.toLocaleString()} — you said you have ${bracketLabel}, so this isn't realistically reachable right now.`,
+    };
+  }
+
+  return { disqualified: false };
+}
+
 interface ScoredDeal {
   relevanceScore: number;
   personalValueUsd: number;
@@ -182,7 +254,13 @@ export async function runMatcher(profile: Profile, candidates: DealCandidate[]):
             // cached — parse it deterministically rather than trusting the
             // model to re-transcribe a number, which it can (and did) botch
             // even while its own reasoning cited the correct figure.
-            return { ...d, relevanceScore: m.relevanceScore, personalValueUsd: parseUsdEstimate(d), reasoning: m.reasoning };
+            return {
+              ...d,
+              relevanceScore: m.relevanceScore,
+              personalValueUsd: parseUsdEstimate(d),
+              reasoning: m.reasoning,
+              ...checkDisqualification(d, profile.answers),
+            };
           })
           .filter((d): d is PersonalizedDeal => d !== null)
           .sort((a, b) => b.relevanceScore - a.relevanceScore);
@@ -199,7 +277,7 @@ export async function runMatcher(profile: Profile, candidates: DealCandidate[]):
     .map((d) => {
       const scored = heuristicScore(d, profile.answers);
       if (!scored) return null;
-      return { ...d, ...scored };
+      return { ...d, ...scored, ...checkDisqualification(d, profile.answers) };
     })
     .filter((d): d is PersonalizedDeal => d !== null)
     .sort((a, b) => b.relevanceScore - a.relevanceScore);

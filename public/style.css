@@ -124,6 +124,23 @@ button { font-family: inherit; }
 .nav-link.is-active { background: var(--surface); border-color: var(--surface-line); color: var(--text); }
 .nav-link:hover { color: var(--text); border-color: var(--surface-line); }
 
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--hot);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
 main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
 
 .view[hidden] { display: none; }
@@ -266,6 +283,18 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
   gap: 16px;
 }
 
+.deals__disqualified { margin-top: 40px; }
+.deals__disqualified-heading {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--surface-line);
+}
+
 .deal-card {
   background: var(--surface);
   border: 1px solid var(--surface-line);
@@ -278,6 +307,14 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
   position: relative;
   border-top: 3px solid var(--tier-color, var(--common));
 }
+
+/* Greyed out but never hidden — you were considered, just not eligible
+   right now. Only the value/title/tier dim; the reason stays fully legible. */
+.deal-card--disqualified { border-top-color: var(--text-faint); opacity: 0.4; }
+
+.deal-card__institution-row { display: flex; align-items: center; gap: 8px; }
+
+.deal-card__logo { border-radius: 4px; flex-shrink: 0; }
 
 .deal-card__institution {
   font-family: var(--font-mono);
@@ -292,6 +329,17 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
   font-size: 30px;
   font-weight: 700;
   color: var(--money);
+}
+
+.deal-card__disqualified {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hot);
+  background: color-mix(in srgb, var(--hot) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hot) 40%, transparent);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  line-height: 1.4;
 }
 
 .deal-card__tier {
