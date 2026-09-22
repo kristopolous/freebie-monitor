@@ -353,6 +353,23 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
   color: var(--tier-color, var(--common));
 }
 
+/* Already committed to — distinct border so it reads differently in the
+   grid at a glance, not just from the badge/button text. */
+.deal-card--tracking { border-color: color-mix(in srgb, var(--money) 55%, transparent); }
+
+.deal-card__tracking-badge {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--money);
+  background: color-mix(in srgb, var(--money) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--money) 45%, transparent);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+
 .deal-card__reasoning {
   font-size: 13px;
   color: var(--text-soft);

@@ -4,6 +4,7 @@ const state = {
   profileId: null,
   answers: {},
   deals: [],
+  trackedDealIds: new Set(),
 };
 
 const views = {
@@ -249,9 +250,16 @@ function animatePipeline(order) {
 
 async function fetchDeals() {
   document.getElementById('pipelineStatus').textContent = 'Scanning for free money…';
-  const res = await fetch(`api/deals?profileId=${state.profileId}`);
-  const { deals } = await res.json();
+  const [dealsRes, commitmentsRes] = await Promise.all([
+    fetch(`api/deals?profileId=${state.profileId}`),
+    fetch(`api/commitments?profileId=${state.profileId}`),
+  ]);
+  const { deals } = await dealsRes.json();
+  const { commitments } = await commitmentsRes.json();
   state.deals = deals;
+  // So a deal already being tracked shows as such right in the grid,
+  // instead of only finding out after clicking "I'm doing this" again.
+  state.trackedDealIds = new Set(commitments.filter((c) => c.status === 'tracking').map((c) => c.dealId));
   renderDeals();
   showView('deals');
   setActiveNav('deals');
@@ -260,9 +268,11 @@ async function fetchDeals() {
 function dealCardHtml(d) {
   const tier = tierFor(d.relevanceScore);
   const favicon = faviconUrl(d.sourceUrl);
+  const tracking = state.trackedDealIds.has(d.id);
   return `
-    <article class="deal-card ${d.disqualified ? 'deal-card--disqualified' : ''}" style="--tier-color: var(${tier.varName})">
+    <article class="deal-card ${d.disqualified ? 'deal-card--disqualified' : ''} ${tracking ? 'deal-card--tracking' : ''}" style="--tier-color: var(${tier.varName})">
       <span class="deal-card__tier">${tier.label}</span>
+      ${tracking ? `<span class="deal-card__tracking-badge">✓ Tracking</span>` : ''}
       <div class="deal-card__institution-row">
         ${favicon ? `<img class="deal-card__logo" src="${favicon}" alt="" width="20" height="20" loading="lazy" onerror="this.remove()" />` : ''}
         <span class="deal-card__institution">${escapeHtml(d.institution)}</span>
@@ -275,7 +285,11 @@ function dealCardHtml(d) {
         <span class="deal-card__rule-label">The rule</span>
         <p class="deal-card__rule-text">${escapeHtml(d.requirement)}</p>
       </div>
-      <button class="btn btn--secondary" data-track="${d.id}">I'm doing this</button>
+      ${
+        tracking
+          ? `<button class="btn btn--ghost" data-view-tracking>Already tracking — view in To-Do</button>`
+          : `<button class="btn btn--secondary" data-track="${d.id}">I'm doing this</button>`
+      }
     </article>
   `;
 }
@@ -310,6 +324,9 @@ function renderDeals() {
   document.querySelectorAll('[data-track]').forEach((btn) => {
     btn.addEventListener('click', () => trackDeal(btn.dataset.track));
   });
+  document.querySelectorAll('[data-view-tracking]').forEach((btn) => {
+    btn.addEventListener('click', () => navigateTo('brain'));
+  });
 }
 
 async function trackDeal(dealId) {
@@ -326,6 +343,7 @@ async function trackDeal(dealId) {
     body: JSON.stringify({ profileId: state.profileId, deal }),
   });
   const { commitment } = await res.json();
+  state.trackedDealIds.add(dealId);
 
   showView('deals');
   openTrackedDetail(deal, commitment);
