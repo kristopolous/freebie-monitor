@@ -466,6 +466,83 @@ async function reportProgress(commitmentId, ticketIndex, currentAmount) {
   await refreshScoreTotal();
 }
 
+// ---- calendar ----
+
+const calState = { year: new Date().getFullYear(), month: new Date().getMonth(), commitments: [] };
+
+async function openCalendar() {
+  const res = await fetch(`api/commitments?profileId=${state.profileId}`);
+  const { commitments } = await res.json();
+  calState.commitments = commitments;
+  renderCalendar();
+  showView('calendar');
+}
+
+function renderCalendar() {
+  const { year, month, commitments } = calState;
+  document.getElementById('calMonthLabel').textContent = new Date(year, month, 1).toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const byDate = {};
+  for (const c of commitments) {
+    for (const t of c.plan.tickets) {
+      const key = new Date(t.deadline).toISOString().slice(0, 10);
+      const complete = isTicketComplete(t);
+      const overdue = !complete && new Date(t.deadline).getTime() < Date.now() && t.kind !== 'deadline';
+      const tierVar = complete ? '--money' : overdue ? '--hot' : t.kind === 'deadline' ? '--gold' : '--common';
+      (byDate[key] ||= []).push({ label: `${c.institution}: ${t.title}`, tierVar });
+    }
+  }
+
+  const first = new Date(year, month, 1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+  const todayKey = new Date().toISOString().slice(0, 10);
+
+  const cells = [];
+  for (let i = startDow - 1; i >= 0; i--) cells.push({ day: daysInPrevMonth - i, otherMonth: true, key: null });
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push({ day: d, otherMonth: false, key: `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` });
+  }
+  let trailing = 1;
+  while (cells.length % 7 !== 0) cells.push({ day: trailing++, otherMonth: true, key: null });
+
+  document.getElementById('calGrid').innerHTML = cells
+    .map((cell) => {
+      const items = cell.key ? byDate[cell.key] || [] : [];
+      const shown = items.slice(0, 3);
+      const overflow = items.length - shown.length;
+      return `
+      <div class="calendar__day ${cell.otherMonth ? 'calendar__day--other-month' : ''} ${cell.key === todayKey ? 'calendar__day--today' : ''}">
+        <div class="calendar__day-number">${cell.day}</div>
+        ${shown.map((it) => `<div class="calendar__pill" style="--tier-color: var(${it.tierVar})" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</div>`).join('')}
+        ${overflow > 0 ? `<div class="calendar__pill" style="--tier-color: var(--common)">+${overflow} more</div>` : ''}
+      </div>
+    `;
+    })
+    .join('');
+}
+
+document.getElementById('calPrev').addEventListener('click', () => {
+  calState.month -= 1;
+  if (calState.month < 0) {
+    calState.month = 11;
+    calState.year -= 1;
+  }
+  renderCalendar();
+});
+document.getElementById('calNext').addEventListener('click', () => {
+  calState.month += 1;
+  if (calState.month > 11) {
+    calState.month = 0;
+    calState.year += 1;
+  }
+  renderCalendar();
+});
+
 // ---- nav ----
 
 function setActiveNav(name) {
@@ -474,19 +551,31 @@ function setActiveNav(name) {
   });
 }
 
+// Kept in the URL so refreshing (Ctrl+R) lands back on the same view instead
+// of always resetting to Drops.
+function syncViewToUrl(name) {
+  const url = new URL(location.href);
+  url.searchParams.set('view', name);
+  history.replaceState(null, '', url);
+}
+
+async function navigateTo(target) {
+  setActiveNav(target);
+  syncViewToUrl(target);
+  if (target === 'brain') {
+    await fetchDocket();
+    showView('brain');
+  } else if (target === 'settings') {
+    openSettings();
+  } else if (target === 'calendar') {
+    await openCalendar();
+  } else {
+    await fetchDeals();
+  }
+}
+
 document.querySelectorAll('[data-nav]').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const target = btn.dataset.nav;
-    setActiveNav(target);
-    if (target === 'brain') {
-      fetchDocket();
-      showView('brain');
-    } else if (target === 'settings') {
-      openSettings();
-    } else {
-      showView('deals');
-    }
-  });
+  btn.addEventListener('click', () => navigateTo(btn.dataset.nav));
 });
 
 function escapeHtml(str) {

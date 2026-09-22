@@ -218,6 +218,6 @@ app.post('/api/commitments/:id/tickets/:index/report', async (c) => {
 app.use('/*', serveStatic({ root: './public' }));
 
 const port = Number(process.env.PORT || 3000);
-serve({ fetch: app.fetch, port, hostname: '100.71.246.99' }, (info) => {
-  console.log(`Freebie Monitor running at http://localhost:${info.port} (listening on 100.71.246.99, Tailscale)`);
+serve({ fetch: app.fetch, port, hostname: '0.0.0.0' }, (info) => {
+  console.log(`Freebie Monitor running at http://localhost:${info.port} (all interfaces, incl. Tailscale)`);
 });

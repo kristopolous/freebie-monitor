@@ -84,14 +84,14 @@ button { font-family: inherit; }
 
 .masthead {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 20px;
-  padding: 20px 24px 16px;
+  padding: 16px 24px;
   border-bottom: 2px solid var(--text);
   flex-wrap: wrap;
 }
 
-.masthead__title { display: flex; align-items: baseline; gap: 10px; }
+.masthead__title { display: flex; align-items: center; gap: 10px; }
 .masthead__mark { display: block; border-radius: 7px; }
 .masthead__title h1 { font-size: 22px; letter-spacing: -0.01em; }
 
