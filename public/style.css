@@ -462,6 +462,9 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
   white-space: nowrap;
   cursor: default;
 }
+.calendar__pill--cancelled { text-decoration: line-through; opacity: 0.6; }
+
+.day-dialog__label--cancelled { text-decoration: line-through; color: var(--text-faint); }
 
 @media (max-width: 640px) {
   .calendar__weekdays span:nth-child(n) { font-size: 9px; }

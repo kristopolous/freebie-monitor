@@ -558,16 +558,21 @@ function renderCalendar() {
 
   const byDate = {};
   for (const c of commitments) {
+    const cancelled = c.status === 'cancelled';
     for (const t of c.plan.tickets) {
       const key = new Date(t.deadline).toISOString().slice(0, 10);
       const complete = isTicketComplete(t);
-      const overdue = !complete && new Date(t.deadline).getTime() < Date.now() && t.kind !== 'deadline';
-      const tierVar = complete ? '--money' : overdue ? '--hot' : t.kind === 'deadline' ? '--gold' : '--common';
+      // A backed-out commitment isn't overdue or upcoming anymore - it's just
+      // cancelled. Muted/common color instead of the hot "overdue" red, which
+      // would otherwise keep nagging about a deal you already walked away from.
+      const overdue = !cancelled && !complete && new Date(t.deadline).getTime() < Date.now() && t.kind !== 'deadline';
+      const tierVar = cancelled ? '--common' : complete ? '--money' : overdue ? '--hot' : t.kind === 'deadline' ? '--gold' : '--common';
       (byDate[key] ||= []).push({
         label: `${c.institution}: ${t.title}`,
         tierVar,
         dealTitle: c.dealTitle,
-        statusLabel: complete ? 'Done' : overdue ? 'Overdue' : 'Upcoming',
+        statusLabel: cancelled ? 'Cancelled' : complete ? 'Done' : overdue ? 'Overdue' : 'Upcoming',
+        cancelled,
       });
     }
   }
@@ -596,7 +601,7 @@ function renderCalendar() {
       return `
       <div class="calendar__day ${cell.otherMonth ? 'calendar__day--other-month' : ''} ${cell.key === todayKey ? 'calendar__day--today' : ''} ${clickable ? 'calendar__day--clickable' : ''}" ${clickable ? `data-daykey="${cell.key}"` : ''}>
         <div class="calendar__day-number">${cell.day}</div>
-        ${shown.map((it) => `<div class="calendar__pill" style="--tier-color: var(${it.tierVar})" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</div>`).join('')}
+        ${shown.map((it) => `<div class="calendar__pill ${it.cancelled ? 'calendar__pill--cancelled' : ''}" style="--tier-color: var(${it.tierVar})" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</div>`).join('')}
         ${overflow > 0 ? `<div class="calendar__pill" style="--tier-color: var(--common)">+${overflow} more</div>` : ''}
       </div>
     `;
@@ -623,7 +628,7 @@ function openDayDialog(dayKey) {
     <li class="day-dialog__item">
       <span class="day-dialog__dot" style="background: var(${it.tierVar})"></span>
       <div>
-        <div class="day-dialog__label">${escapeHtml(it.label)}</div>
+        <div class="day-dialog__label ${it.cancelled ? 'day-dialog__label--cancelled' : ''}">${escapeHtml(it.label)}</div>
         <div class="day-dialog__status">${escapeHtml(it.statusLabel)} · ${escapeHtml(it.dealTitle)}</div>
       </div>
     </li>`,
