@@ -7,14 +7,14 @@
 Ported from https://github.com/sandhya-subramani/Agent-with-a-Brain (Cognee + Strands Agents),
 same shape, personal-rewards-tracking domain instead of retail support. Read top to bottom:
   MEMORY    CogneeMemory: the rewards brain, plugged in as a Strands memory store
-  TOOLS     find_deals, start_tracking (real Docker sandbox), apply_for_account (never runs)
+  TOOLS     find_deals (live via Bright Data, cached), start_tracking, report_progress,
+            check_company_standing (live via Bright Data, cached), apply_for_account (never runs)
   HOOK      AuditHook prints every tool call
   STEERING  NeverSignUp permanently blocks apply_for_account before it runs
 """
 
 import asyncio
 import re
-import subprocess
 import sys
 from datetime import datetime, timedelta
 
@@ -258,13 +258,14 @@ def start_tracking(deal_id: str) -> str:
     ticket set (eligibility confirmations, the qualified-deposit definition, the deposit target,
     the maintenance window, and the offer's own expiration) from the deal's real data — you do
     not supply any of these values yourself, only the deal_id, so nothing gets retyped or
-    approximated. Runs in an isolated, network-less Docker sandbox and does not sign anyone up
-    for anything — it only sets up tracking for a deal the human is going to go do on their own.
+    approximated. This is calendar-and-reminder bookkeeping, not code execution, so it just
+    builds the tickets directly — it does not sign anyone up for anything; that stays a human
+    action the person does themselves.
 
     Args:
-        deal_id: The deal id, e.g. citi-checking-300.
+        deal_id: The deal id, as returned by find_deals.
     """
-    deal = DEALS.get(deal_id)
+    deal = DEALS.get(deal_id) or _live_deals.get(deal_id)
     if not deal:
         return f"Unknown deal_id {deal_id!r}. Call find_deals first."
 
@@ -277,27 +278,13 @@ def start_tracking(deal_id: str) -> str:
             f"[target ${deal['deposit_target_usd']:,}] Deposit qualified funds — "
             f"due {_addr_days(deal['deposit_window_days'])}"
         )
+    elif deal.get("requirement"):
+        tickets.append(f"[action] Meet the requirement: {deal['requirement']} — due {_addr_days(deal['deposit_window_days'])}")
     if deal["maintenance_period_days"]:
         maintain_by = deal["deposit_window_days"] + deal["maintenance_period_days"]
         tickets.append(f"[action] Maintain the balance without dropping below the minimum — until {_addr_days(maintain_by)}")
 
-    script = "; ".join(
-        [
-            f"echo '[actor] tracking initialized for {deal['institution']} ({deal_id})'",
-            "echo '[actor] this does not sign anyone up for anything'",
-            *[f"echo '[actor] ticket: {t}'" for t in tickets],
-        ]
-    )
-    try:
-        result = subprocess.run(
-            ["docker", "run", "--rm", "--network", "none", "busybox", "sh", "-c", script],
-            capture_output=True, text=True, timeout=15,
-        )
-        log = result.stdout.strip() or result.stderr.strip()
-    except Exception as e:
-        log = f"(sandbox unavailable: {e})"
-
-    return f"Tracking {deal['title']} (worth ${deal['value_usd']:,}). Tickets:\n" + "\n".join(tickets) + f"\n\n{log}"
+    return f"Tracking {deal['title']} (worth ${deal['value_usd']:,}). Tickets:\n" + "\n".join(tickets)
 
 
 @tool
