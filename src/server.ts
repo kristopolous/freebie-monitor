@@ -19,6 +19,7 @@ import { dockerIsAvailable } from './integrations/sandbox.js';
 import { getProfile, listCommitments, saveCommitment, saveProfile, updateProfile, toggleTicket, reportTicketProgress } from './store.js';
 import { computeNag } from './nag.js';
 import { getCachedDeals, setCachedDeals, invalidateDeals } from './dealsCache.js';
+import { getCachedPlan, setCachedPlan } from './plansCache.js';
 import type { PersonalizedDeal } from './types.js';
 
 const app = new Hono();
@@ -121,7 +122,11 @@ app.post('/api/deals/track', async (c) => {
   if (!profile) return c.json({ error: 'unknown profile' }, 404);
 
   const deal = parsed.data.deal;
-  const plan = await runStrategist(deal, profile);
+  let plan = getCachedPlan(deal.id);
+  if (!plan) {
+    plan = await runStrategist(deal, profile);
+    setCachedPlan(deal.id, plan);
+  }
   const trackedPlan = await runActor(deal, plan, profile);
 
   const commitment = await saveCommitment({
