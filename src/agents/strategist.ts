@@ -25,6 +25,25 @@ function parseSubDeadlineDays(requirement: string, fallback: number): number {
   return m ? Number(m[1]) : fallback;
 }
 
+// The artifact text (both the model and the heuristic fallback write it as
+// "Day N — do this check-in") reads like a reminder schedule, but prose in a
+// one-time confirmation dialog isn't actually a reminder — it never shows up
+// on the calendar or the To-Do list again once the dialog is closed. Pull
+// each "Day N — ..." line out as a real 'deadline' ticket so it's genuinely
+// tracked, instead of trusting the model to have also encoded it that way.
+function extractReminderTickets(content: string): Ticket[] {
+  const tickets: Ticket[] = [];
+  const seenDays = new Set<number>();
+  for (const m of content.matchAll(/Day\s+(\d+)\s*[—–-]\s*([^\n]+)/gi)) {
+    const day = Number(m[1]);
+    if (!Number.isFinite(day) || seenDays.has(day)) continue;
+    seenDays.add(day);
+    const title = m[2].trim().replace(/\s+/g, ' ').slice(0, 140);
+    tickets.push({ title: `Check-in: ${title}`, kind: 'deadline', deadline: addDays(day) });
+  }
+  return tickets;
+}
+
 function heuristicPlan(deal: PersonalizedDeal, profile: Profile): ExecutionPlan {
   const kind = artifactKindFor(deal);
   const targetAmount = parseTargetAmount(deal.requirement);
@@ -59,7 +78,7 @@ function heuristicPlan(deal: PersonalizedDeal, profile: Profile): ExecutionPlan 
   return {
     dealId: deal.id,
     profileId: profile.id,
-    tickets,
+    tickets: [...tickets, ...extractReminderTickets(content)],
     deadline: addDays(deal.requirementDays),
     deadlineDays: deal.requirementDays,
     artifact: { kind, content },
@@ -138,7 +157,7 @@ export async function runStrategist(deal: PersonalizedDeal, profile: Profile): P
     return {
       dealId: deal.id,
       profileId: profile.id,
-      tickets,
+      tickets: [...tickets, ...extractReminderTickets(structured.artifactContent)],
       deadline: addDays(deal.requirementDays),
       deadlineDays: deal.requirementDays,
       artifact: { kind: structured.artifactKind, content: structured.artifactContent },
