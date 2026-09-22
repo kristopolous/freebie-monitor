@@ -539,7 +539,7 @@ async function reactivateCommitment(commitmentId) {
 
 // ---- calendar ----
 
-const calState = { year: new Date().getFullYear(), month: new Date().getMonth(), commitments: [] };
+const calState = { year: new Date().getFullYear(), month: new Date().getMonth(), commitments: [], byDate: {} };
 
 async function openCalendar() {
   const res = await fetch(`api/commitments?profileId=${state.profileId}`);
@@ -563,9 +563,15 @@ function renderCalendar() {
       const complete = isTicketComplete(t);
       const overdue = !complete && new Date(t.deadline).getTime() < Date.now() && t.kind !== 'deadline';
       const tierVar = complete ? '--money' : overdue ? '--hot' : t.kind === 'deadline' ? '--gold' : '--common';
-      (byDate[key] ||= []).push({ label: `${c.institution}: ${t.title}`, tierVar });
+      (byDate[key] ||= []).push({
+        label: `${c.institution}: ${t.title}`,
+        tierVar,
+        dealTitle: c.dealTitle,
+        statusLabel: complete ? 'Done' : overdue ? 'Overdue' : 'Upcoming',
+      });
     }
   }
+  calState.byDate = byDate;
 
   const first = new Date(year, month, 1);
   const startDow = first.getDay();
@@ -586,8 +592,9 @@ function renderCalendar() {
       const items = cell.key ? byDate[cell.key] || [] : [];
       const shown = items.slice(0, 3);
       const overflow = items.length - shown.length;
+      const clickable = items.length > 0;
       return `
-      <div class="calendar__day ${cell.otherMonth ? 'calendar__day--other-month' : ''} ${cell.key === todayKey ? 'calendar__day--today' : ''}">
+      <div class="calendar__day ${cell.otherMonth ? 'calendar__day--other-month' : ''} ${cell.key === todayKey ? 'calendar__day--today' : ''} ${clickable ? 'calendar__day--clickable' : ''}" ${clickable ? `data-daykey="${cell.key}"` : ''}>
         <div class="calendar__day-number">${cell.day}</div>
         ${shown.map((it) => `<div class="calendar__pill" style="--tier-color: var(${it.tierVar})" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</div>`).join('')}
         ${overflow > 0 ? `<div class="calendar__pill" style="--tier-color: var(--common)">+${overflow} more</div>` : ''}
@@ -595,7 +602,39 @@ function renderCalendar() {
     `;
     })
     .join('');
+
+  document.querySelectorAll('.calendar__day--clickable').forEach((el) => {
+    el.addEventListener('click', () => openDayDialog(el.dataset.daykey));
+  });
 }
+
+function openDayDialog(dayKey) {
+  const items = calState.byDate[dayKey] || [];
+  if (items.length === 0) return;
+
+  document.getElementById('dayDialogTitle').textContent = new Date(dayKey + 'T00:00:00').toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+  document.getElementById('dayDialogList').innerHTML = items
+    .map(
+      (it) => `
+    <li class="day-dialog__item">
+      <span class="day-dialog__dot" style="background: var(${it.tierVar})"></span>
+      <div>
+        <div class="day-dialog__label">${escapeHtml(it.label)}</div>
+        <div class="day-dialog__status">${escapeHtml(it.statusLabel)} · ${escapeHtml(it.dealTitle)}</div>
+      </div>
+    </li>`,
+    )
+    .join('');
+  document.getElementById('dayDialog').showModal();
+}
+
+document.getElementById('closeDayDialog').addEventListener('click', () => {
+  document.getElementById('dayDialog').close();
+});
 
 document.getElementById('calPrev').addEventListener('click', () => {
   calState.month -= 1;
