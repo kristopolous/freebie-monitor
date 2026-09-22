@@ -25,6 +25,7 @@ import {
   toggleTicket,
   reportTicketProgress,
   cancelCommitment,
+  reactivateCommitment,
 } from './store.js';
 import { computeNag } from './nag.js';
 import { getCachedDeals, setCachedDeals, invalidateDeals } from './dealsCache.js';
@@ -230,6 +231,13 @@ app.post('/api/commitments/:id/cancel', async (c) => {
   return c.json({ commitment });
 });
 
+// Undoes a cancel — nothing about backing out should be a one-way door.
+app.post('/api/commitments/:id/reactivate', async (c) => {
+  const commitment = await reactivateCommitment(c.req.param('id'));
+  if (!commitment) return c.json({ error: 'unknown commitment, or not cancelled' }, 404);
+  return c.json({ commitment });
+});
+
 const ReportProgressSchema = z.object({ currentAmount: z.number().nonnegative() });
 
 // The person self-reports progress on a 'target' ticket, e.g. "I've
@@ -250,6 +258,16 @@ app.post('/api/commitments/:id/tickets/:index/report', async (c) => {
   return c.json({ commitment: { ...commitment, nag: computeNag(commitment) } });
 });
 
+// Without this, browsers heuristically cache app.js/style.css/index.html on
+// their own schedule with no explicit expiry to key off - a shipped fix can
+// silently sit uninstalled in someone's browser through any number of
+// ordinary reloads, only visible as "I did that and nothing changed."
+// no-cache still allows caching, it just forces a revalidation round-trip
+// (cheap, conditional) on every load instead of trusting a stale copy.
+app.use('/*', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'no-cache');
+});
 app.use('/*', serveStatic({ root: './public' }));
 
 const port = Number(process.env.PORT || 3000);

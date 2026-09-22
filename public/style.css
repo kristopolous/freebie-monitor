@@ -108,6 +108,7 @@ button { font-family: inherit; }
 }
 
 .masthead__nav { display: flex; gap: 4px; margin-left: 16px; }
+.masthead__nav[hidden] { display: none; }
 
 .nav-link {
   background: none;
@@ -559,6 +560,12 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
   color: var(--text-faint);
   cursor: pointer;
 }
+
+.claim-dialog--confirm { max-width: 400px; }
+
+.confirm-dialog h3 { font-size: 18px; margin-bottom: 10px; font-weight: 700; }
+.confirm-dialog p { font-size: 13.5px; color: var(--text-soft); line-height: 1.6; margin-bottom: 20px; }
+.confirm-dialog__actions { display: flex; justify-content: flex-end; gap: 10px; }
 
 .claim-detail h3 { font-size: 18px; margin-bottom: 4px; font-weight: 700; }
 .claim-detail__sub { font-family: var(--font-mono); color: var(--text-faint); font-size: 12px; margin-bottom: 18px; }

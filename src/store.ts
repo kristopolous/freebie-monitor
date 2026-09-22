@@ -126,3 +126,19 @@ export async function cancelCommitment(id: string): Promise<Commitment | undefin
   await writeJson('commitments.json', commitments);
   return commitment;
 }
+
+/**
+ * Undoes a cancel — the person changed their mind again. Recomputes status
+ * off actual ticket completion rather than just forcing 'tracking' back on,
+ * in case everything was already checked off before they backed out.
+ */
+export async function reactivateCommitment(id: string): Promise<Commitment | undefined> {
+  const commitments = await readJson<Commitment[]>('commitments.json', []);
+  const commitment = commitments.find((c) => c.id === id);
+  if (!commitment || commitment.status !== 'cancelled') return undefined;
+
+  commitment.status = 'tracking';
+  refreshStatus(commitment);
+  await writeJson('commitments.json', commitments);
+  return commitment;
+}

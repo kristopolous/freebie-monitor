@@ -16,7 +16,7 @@
       <img class="masthead__mark" src="img/logo.png" alt="" width="32" height="34" />
       <h1>Freebie Monitor</h1>
     </div>
-    <div class="masthead__meta" id="scoreTotal">$0 scored so far</div>
+    <div class="masthead__meta" id="scoreTotal">$0</div>
     <nav class="masthead__nav" id="mainNav" hidden>
       <button data-nav="deals" class="nav-link is-active">Drops</button>
       <button data-nav="brain" class="nav-link">To-Do</button>
@@ -87,7 +87,6 @@
       <div class="deals">
         <div class="deals__summary-row">
           <p class="deals__summary" id="dealsSummary"></p>
-          <button class="btn btn--ghost btn--small" id="rescanBtn" title="Runs a fresh scan instead of using the cached results">↻ Rescan</button>
         </div>
         <div class="deals__grid" id="dealsGrid"></div>
       </div>
@@ -128,6 +127,20 @@
     <div class="claim-dialog__inner">
       <button class="claim-dialog__close" id="closeDialog" aria-label="Close">&times;</button>
       <div id="claimDialogContent"></div>
+    </div>
+  </dialog>
+
+  <dialog id="cancelDialog" class="claim-dialog claim-dialog--confirm">
+    <div class="claim-dialog__inner">
+      <button class="claim-dialog__close" id="closeCancelDialog" aria-label="Close">&times;</button>
+      <div class="confirm-dialog">
+        <h3>Back out of this one?</h3>
+        <p id="cancelDialogText"></p>
+        <div class="confirm-dialog__actions">
+          <button type="button" class="btn btn--ghost" id="cancelDialogNo">Never mind</button>
+          <button type="button" class="btn btn--danger" id="cancelDialogYes">Back out</button>
+        </div>
+      </div>
     </div>
   </dialog>
 

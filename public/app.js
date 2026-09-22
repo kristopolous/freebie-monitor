@@ -56,6 +56,19 @@ const QUESTIONS = [
 ];
 const REQUIRED_FIELDS = QUESTIONS.map((q) => q.field);
 
+// A neutral baseline used to show Drops immediately on first visit, before
+// anyone answers anything — the survey is a filter you apply from Settings
+// to narrow/reorder results toward your real situation, never a gate that
+// blocks seeing anything in the first place.
+const DEFAULT_ANSWERS = {
+  ownsHome: false,
+  flightsPerYear: 'none',
+  idleCashBracket: 'none',
+  bigBoxShopper: false,
+  openToNewAccounts: true,
+  primaryGoal: 'either',
+};
+
 function parseChipValue(raw) {
   return raw === 'true' ? true : raw === 'false' ? false : raw;
 }
@@ -125,7 +138,7 @@ async function refreshScoreTotal() {
     // Only what's actually been earned (every ticket complete) counts —
     // "tracking" is intent, not money in hand yet.
     const total = commitments.filter((c) => c.status === 'fulfilled').reduce((sum, c) => sum + c.personalValueUsd, 0);
-    document.getElementById('scoreTotal').textContent = `$${total.toLocaleString()} scored so far`;
+    document.getElementById('scoreTotal').textContent = `$${total.toLocaleString()}`;
   } catch {
     // non-critical
   }
@@ -203,22 +216,15 @@ function animatePipeline(order) {
 
 // ---- deals / drops ----
 
-async function fetchDeals(force = false) {
+async function fetchDeals() {
   document.getElementById('pipelineStatus').textContent = 'Scanning for free money…';
-  const res = await fetch(`api/deals?profileId=${state.profileId}${force ? '&force=true' : ''}`);
+  const res = await fetch(`api/deals?profileId=${state.profileId}`);
   const { deals } = await res.json();
   state.deals = deals;
   renderDeals();
   showView('deals');
   setActiveNav('deals');
 }
-
-document.getElementById('rescanBtn').addEventListener('click', async () => {
-  showView('pipeline');
-  animatePipeline(['scout', 'matcher']);
-  document.getElementById('pipelineStatus').textContent = 'Rescanning for free money…';
-  await fetchDeals(true);
-});
 
 function renderDeals() {
   const grid = document.getElementById('dealsGrid');
@@ -430,6 +436,7 @@ function renderDocket(commitments) {
           <div class="docket-row__deadline">${deadlineText}</div>
           <div class="docket-row__status docket-row__status--${c.status}">${STATUS_LABEL[c.status] ?? c.status}</div>
           ${c.status === 'tracking' ? `<button type="button" class="btn btn--danger btn--small" data-cancel>Back out</button>` : ''}
+          ${c.status === 'cancelled' ? `<button type="button" class="btn btn--ghost btn--small" data-undo>Undo</button>` : ''}
         </div>
         ${c.nag ? `<p class="docket-nag">⚠ ${escapeHtml(c.nag)}</p>` : ''}
         <ul class="ticket-timeline">${ticketsHtml}</ul>
@@ -441,7 +448,14 @@ function renderDocket(commitments) {
   list.querySelectorAll('[data-cancel]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const item = btn.closest('.docket-item');
-      cancelCommitment(item.dataset.commitment);
+      openCancelConfirm(item.dataset.commitment, item.querySelector('.docket-row__title').textContent);
+    });
+  });
+
+  list.querySelectorAll('[data-undo]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const item = btn.closest('.docket-item');
+      reactivateCommitment(item.dataset.commitment);
     });
   });
 
@@ -489,8 +503,36 @@ async function reportProgress(commitmentId, ticketIndex, currentAmount) {
   await refreshScoreTotal();
 }
 
+let pendingCancelId = null;
+
+function openCancelConfirm(commitmentId, dealTitle) {
+  pendingCancelId = commitmentId;
+  document.getElementById('cancelDialogText').textContent =
+    `"${dealTitle}" drops off your active list. You can undo this later if you change your mind again.`;
+  document.getElementById('cancelDialog').showModal();
+}
+
+document.getElementById('cancelDialogNo').addEventListener('click', () => {
+  document.getElementById('cancelDialog').close();
+});
+
+document.getElementById('cancelDialogYes').addEventListener('click', async () => {
+  document.getElementById('cancelDialog').close();
+  if (pendingCancelId) await cancelCommitment(pendingCancelId);
+  pendingCancelId = null;
+});
+
+document.getElementById('closeCancelDialog').addEventListener('click', () => {
+  document.getElementById('cancelDialog').close();
+});
+
 async function cancelCommitment(commitmentId) {
   await fetch(`api/commitments/${commitmentId}/cancel`, { method: 'POST' });
+  await fetchDocket();
+}
+
+async function reactivateCommitment(commitmentId) {
+  await fetch(`api/commitments/${commitmentId}/reactivate`, { method: 'POST' });
   await fetchDocket();
 }
 
@@ -612,7 +654,35 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// ---- init: restore from localStorage on refresh, or start onboarding ----
+// ---- init: restore from localStorage, or auto-start on defaults ----
+
+// Drops should never be gated behind the survey — this loads a profile into
+// state and jumps straight to whichever tab was last active (or Drops by
+// default), used whether that profile was just restored or just auto-created.
+async function enterApp(profile, { greeting } = {}) {
+  state.profileId = profile.id;
+  state.answers = profile.answers;
+  document.getElementById('mainNav').hidden = false;
+
+  const targetView = new URL(location.href).searchParams.get('view');
+  if (targetView === 'brain') {
+    await fetchDocket();
+    showView('brain');
+    setActiveNav('brain');
+  } else if (targetView === 'calendar') {
+    await openCalendar();
+    setActiveNav('calendar');
+  } else if (targetView === 'settings') {
+    openSettings();
+    setActiveNav('settings');
+  } else {
+    showView('pipeline');
+    document.getElementById('pipelineStatus').textContent = greeting ?? 'Welcome back — scanning for free money…';
+    animatePipeline(['scout', 'matcher']);
+    await fetchDeals();
+  }
+  await refreshScoreTotal();
+}
 
 async function init() {
   loadStatus();
@@ -623,45 +693,32 @@ async function init() {
       const res = await fetch(`api/profile/${savedId}`);
       if (res.ok) {
         const { profile } = await res.json();
-        state.profileId = profile.id;
-        state.answers = profile.answers;
-        document.getElementById('mainNav').hidden = false;
-
-        // Restore whichever tab was last active (written by syncViewToUrl on
-        // every nav click) instead of always dropping back to Drops on a
-        // plain refresh.
-        const targetView = new URL(location.href).searchParams.get('view');
-        if (targetView === 'brain') {
-          await fetchDocket();
-          showView('brain');
-          setActiveNav('brain');
-        } else if (targetView === 'calendar') {
-          await openCalendar();
-          setActiveNav('calendar');
-        } else if (targetView === 'settings') {
-          openSettings();
-          setActiveNav('settings');
-        } else {
-          showView('pipeline');
-          document.getElementById('pipelineStatus').textContent = 'Welcome back — scanning for free money…';
-          animatePipeline(['scout', 'matcher']);
-          await fetchDeals();
-        }
-        await refreshScoreTotal();
+        await enterApp(profile);
         return;
       }
       // A definitive "this profile doesn't exist" (404) means the saved id is
       // genuinely stale. Anything else (500/502/503 from a mid-restart proxy
-      // hiccup, a flaky response) is transient and must NOT wipe the user's
-      // saved session over it — fall through to onboarding for just this
-      // load and leave the id in place so the next successful load recovers it.
+      // hiccup, a flaky response) is transient — fall through to the default
+      // profile below for just this load, without wiping the saved id, so a
+      // later successful load still recovers it.
       if (res.status === 404) localStorage.removeItem(STORAGE_KEY);
     } catch {
-      // network/proxy hiccup — leave the saved id alone, just show onboarding for now
+      // network/proxy hiccup — leave the saved id alone, fall through below
     }
   }
 
-  buildQuestionFields(document.getElementById('onboardFields'), {}, state.answers, checkOnboardComplete);
+  // No usable saved profile — auto-create a neutral default one and show
+  // Drops right away instead of blocking on the survey. Settings (using the
+  // exact same answers/questions) is where someone narrows results toward
+  // their real situation, whenever they want to, never a precondition.
+  const res = await fetch('api/onboard', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(DEFAULT_ANSWERS),
+  });
+  const { profile } = await res.json();
+  localStorage.setItem(STORAGE_KEY, profile.id);
+  await enterApp(profile, { greeting: 'Finding free money…' });
 }
 
 init();
