@@ -82,7 +82,7 @@ app.patch('/api/profile/:id', async (c) => {
   const profile = await updateProfile(c.req.param('id'), parsed.data);
   if (!profile) return c.json({ error: 'unknown profile' }, 404);
   await mirrorAnswersToCognee(profile.id, parsed.data);
-  invalidateDeals(profile.id); // matching depends on the answers that just changed
+  await invalidateDeals(profile.id); // matching depends on the answers that just changed
 
   return c.json({ profile });
 });
@@ -95,13 +95,13 @@ app.get('/api/deals', async (c) => {
 
   const force = c.req.query('force') === 'true';
   if (!force) {
-    const cached = getCachedDeals(profileId);
+    const cached = await getCachedDeals(profileId);
     if (cached) return c.json({ deals: cached, cached: true });
   }
 
   const candidates = await runScout();
   const deals = await runMatcher(profile, candidates);
-  setCachedDeals(profileId, deals);
+  await setCachedDeals(profileId, deals);
   return c.json({ deals, cached: false });
 });
 
