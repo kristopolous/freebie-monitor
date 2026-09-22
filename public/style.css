@@ -347,7 +347,7 @@ main { max-width: 880px; margin: 0 auto; padding: 32px 24px 96px; }
 
 .docket-row {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto;
   gap: 16px;
   align-items: center;
   padding: 14px 0;

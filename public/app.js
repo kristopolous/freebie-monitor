@@ -394,7 +394,13 @@ function renderDocket(commitments) {
   }
 
   const now = Date.now();
-  list.innerHTML = commitments
+  // Active commitments are what you're actually meant to act on — those
+  // belong above anything already fulfilled, backed out of, or missed,
+  // regardless of deadline order within each group.
+  const STATUS_PRIORITY = { tracking: 0, fulfilled: 1, missed: 2, cancelled: 3 };
+  const sorted = [...commitments].sort((a, b) => (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9));
+
+  list.innerHTML = sorted
     .map((c) => {
       const days = Math.round((new Date(c.deadline) - now) / 86400000);
       const deadlineText = days <= 0 ? 'due now' : `${days} day${days === 1 ? '' : 's'} left`;
@@ -620,10 +626,27 @@ async function init() {
         state.profileId = profile.id;
         state.answers = profile.answers;
         document.getElementById('mainNav').hidden = false;
-        showView('pipeline');
-        document.getElementById('pipelineStatus').textContent = 'Welcome back — scanning for free money…';
-        animatePipeline(['scout', 'matcher']);
-        await fetchDeals();
+
+        // Restore whichever tab was last active (written by syncViewToUrl on
+        // every nav click) instead of always dropping back to Drops on a
+        // plain refresh.
+        const targetView = new URL(location.href).searchParams.get('view');
+        if (targetView === 'brain') {
+          await fetchDocket();
+          showView('brain');
+          setActiveNav('brain');
+        } else if (targetView === 'calendar') {
+          await openCalendar();
+          setActiveNav('calendar');
+        } else if (targetView === 'settings') {
+          openSettings();
+          setActiveNav('settings');
+        } else {
+          showView('pipeline');
+          document.getElementById('pipelineStatus').textContent = 'Welcome back — scanning for free money…';
+          animatePipeline(['scout', 'matcher']);
+          await fetchDeals();
+        }
         await refreshScoreTotal();
         return;
       }
